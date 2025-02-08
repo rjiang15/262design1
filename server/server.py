@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Server for account and messaging functionalities (Phase 3.5).
+Server for account and messaging functionalities (Phase 3.5 and Phase 4).
 Supports the following commands (each terminated with a newline):
 
   Account management:
@@ -16,6 +16,10 @@ Supports the following commands (each terminated with a newline):
     DELETE_MSG username hashed_password <msg_id|ALL>
     MARK_READ username hashed_password <msg_id|ALL>
 
+  Listing:
+    LIST [pattern] [offset] [limit]  
+      - Lists accounts matching the given wildcard pattern (if any), with pagination.
+  
   Debugging:
     SHOW_DB   -- Display the contents of the database on the server console
 
@@ -83,8 +87,40 @@ def process_command(command):
         display_db_contents()
         return "OK: Database contents displayed on server console"
     
+    # LISTING COMMAND: LIST [pattern] [offset] [limit]
+    elif cmd == "LIST":
+        # Defaults:
+        pattern = "%"
+        offset = 0
+        limit = 10
+        if len(tokens) > 1:
+            pattern = tokens[1]
+            # If user did not include a SQL wildcard, add them.
+            if "%" not in pattern:
+                pattern = "%" + pattern + "%"
+        if len(tokens) > 2:
+            try:
+                offset = int(tokens[2])
+            except ValueError:
+                return "ERROR: offset must be an integer"
+        if len(tokens) > 3:
+            try:
+                limit = int(tokens[3])
+            except ValueError:
+                return "ERROR: limit must be an integer"
+        cursor.execute("SELECT username FROM accounts WHERE username LIKE ? LIMIT ? OFFSET ?", (pattern, limit, offset))
+        rows = cursor.fetchall()
+        if not rows:
+            return "OK: No accounts found"
+        cursor.execute("SELECT COUNT(*) FROM accounts WHERE username LIKE ?", (pattern,))
+        total = cursor.fetchone()[0]
+        response_lines = [f"Total accounts matching: {total}", "Accounts:"]
+        for row in rows:
+            response_lines.append(row[0])
+        return "\n".join(response_lines)
+    
     # ACCOUNT MANAGEMENT COMMANDS
-    if cmd == "CREATE":
+    elif cmd == "CREATE":
         if len(tokens) != 3:
             return "ERROR: Usage: CREATE username hashed_password"
         username, hashed_password = tokens[1], tokens[2]
