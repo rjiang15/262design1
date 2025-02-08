@@ -5,6 +5,7 @@ Initial Functions from @waldo
 Design Exercise 1 for CS 2620 S25
 
 """
+
 import socket
 
 HOST = "127.0.0.1"
