@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Client for account and messaging functionalities (Phase 3.5).
-Provides a menu for account management and messaging.
+Client for account and messaging functionalities (Phase 3.5 and Phase 4).
+Provides a menu for account management, messaging, and listing accounts.
 Passwords are hashed (SHA-256) before being sent.
 After a successful login, session credentials are stored for subsequent commands.
 """
@@ -36,7 +36,8 @@ def main():
             print("7) Mark Message as Read")
             print("8) Logout")
             print("9) Exit")
-            print("10) Show Database (Debug)")  # New option for SHOW_DB
+            print("10) Show Database (Debug)")
+            print("11) List Accounts")  # New option for listing accounts
             choice = input("Enter your choice: ").strip()
 
             if choice == "9":
@@ -146,6 +147,23 @@ def main():
                 s.sendall((command + "\n").encode('utf-8'))
                 response = s.recv(2048).decode('utf-8')
                 print("Server response:", response.strip())
+
+            # LIST ACCOUNTS
+            elif choice == "11":
+                # Prompt for optional filtering and pagination parameters.
+                pattern = input("Enter a pattern to filter accounts (leave blank for all): ").strip()
+                if not pattern:
+                    pattern = "%"
+                offset = input("Enter offset (default 0): ").strip()
+                if not offset:
+                    offset = "0"
+                limit = input("Enter limit (default 10): ").strip()
+                if not limit:
+                    limit = "10"
+                command = f"LIST {pattern} {offset} {limit}"
+                s.sendall((command + "\n").encode('utf-8'))
+                response = s.recv(4096).decode('utf-8')
+                print("Server response:\n", response.strip())
 
             else:
                 print("Invalid choice.")
