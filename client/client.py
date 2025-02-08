@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Client for account and messaging functionalities (Phase 3).
+Client for account and messaging functionalities (Phase 3.5).
 Provides a menu for account management and messaging.
 Passwords are hashed (SHA-256) before being sent.
 After a successful login, session credentials are stored for subsequent commands.
@@ -20,11 +20,11 @@ def hash_password(password):
 def main():
     session_username = None
     session_hash = None
-    
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
         print("Connected to server.")
-        
+
         while True:
             print("\nSelect an option:")
             print("1) Create Account")
@@ -33,13 +33,15 @@ def main():
             print("4) Send Message")
             print("5) Read Messages")
             print("6) Delete Message")
-            print("7) Logout")
-            print("8) Exit")
+            print("7) Mark Message as Read")
+            print("8) Logout")
+            print("9) Exit")
+            print("10) Show Database (Debug)")  # New option for SHOW_DB
             choice = input("Enter your choice: ").strip()
-            
-            if choice == "8":
+
+            if choice == "9":
                 break
-            
+
             # CREATE ACCOUNT
             if choice == "1":
                 username = input("Enter username: ").strip()
@@ -49,7 +51,7 @@ def main():
                 s.sendall((command + "\n").encode('utf-8'))
                 response = s.recv(2048).decode('utf-8')
                 print("Server response:", response.strip())
-            
+
             # LOGIN
             elif choice == "2":
                 username = input("Enter username: ").strip()
@@ -62,7 +64,7 @@ def main():
                 if response.startswith("OK:"):
                     session_username = username
                     session_hash = hashed
-            
+
             # DELETE ACCOUNT
             elif choice == "3":
                 if session_username is None:
@@ -79,7 +81,7 @@ def main():
                 if response.startswith("OK:") and session_username == username:
                     session_username = None
                     session_hash = None
-            
+
             # SEND MESSAGE
             elif choice == "4":
                 if session_username is None:
@@ -91,7 +93,7 @@ def main():
                 s.sendall((command + "\n").encode('utf-8'))
                 response = s.recv(2048).decode('utf-8')
                 print("Server response:", response.strip())
-            
+
             # READ MESSAGES
             elif choice == "5":
                 if session_username is None:
@@ -102,7 +104,7 @@ def main():
                 s.sendall((command + "\n").encode('utf-8'))
                 response = s.recv(4096).decode('utf-8')
                 print("Server response:\n", response.strip())
-            
+
             # DELETE MESSAGE
             elif choice == "6":
                 if session_username is None:
@@ -113,13 +115,38 @@ def main():
                 s.sendall((command + "\n").encode('utf-8'))
                 response = s.recv(2048).decode('utf-8')
                 print("Server response:", response.strip())
-            
-            # LOGOUT
+
+            # MARK MESSAGE AS READ
             elif choice == "7":
-                session_username = None
-                session_hash = None
-                print("Logged out.")
-            
+                if session_username is None:
+                    print("Please login first.")
+                    continue
+                target = input("Enter message ID to mark as read or ALL to mark all as read: ").strip()
+                command = f"MARK_READ {session_username} {session_hash} {target}"
+                s.sendall((command + "\n").encode('utf-8'))
+                response = s.recv(2048).decode('utf-8')
+                print("Server response:", response.strip())
+
+            # LOGOUT
+            elif choice == "8":
+                if session_username is None:
+                    print("Not logged in.")
+                    continue
+                command = f"LOGOUT {session_username} {session_hash}"
+                s.sendall((command + "\n").encode('utf-8'))
+                response = s.recv(2048).decode('utf-8')
+                print("Server response:", response.strip())
+                if response.startswith("OK:"):
+                    session_username = None
+                    session_hash = None
+
+            # SHOW DATABASE (Debug)
+            elif choice == "10":
+                command = "SHOW_DB"
+                s.sendall((command + "\n").encode('utf-8'))
+                response = s.recv(2048).decode('utf-8')
+                print("Server response:", response.strip())
+
             else:
                 print("Invalid choice.")
 
