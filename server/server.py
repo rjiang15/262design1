@@ -1,9 +1,8 @@
 #!/usr/bin/evn python3
 # -*- coding: utf-8 -*-
 """
-Created on 1/30/25
-
-@author waldo
+Initial Functions from @waldo
+Design Exercise 1 for CS 2620 S25
 
 """
 
