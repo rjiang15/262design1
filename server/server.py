@@ -1,9 +1,8 @@
 #!/usr/bin/evn python3
 # -*- coding: utf-8 -*-
 """
-Created on 1/30/25
-
-@author waldo
+Initial Functions from @waldo
+Design Exercise 1 for CS 2620 S25
 
 """
 
@@ -16,24 +15,8 @@ sel = selectors.DefaultSelector()
 HOST = "127.0.0.1"
 PORT = 54400
 
-
-def convert_word(word):
-    vowels = "aeiou"
-    if word[0].lower() in vowels:
-        return word + "yay"
-    else:
-        for i, letter in enumerate(word):
-            if letter.lower() in vowels:
-                return word[i:] + word[:i] + "ay"
-        return word + "ay"  # In case there are no vowels
-
-def trans_to_pig_latin(text):
-    words = text.split()
-    pig_latin_words = [convert_word(word) for word in words]
-    return " ".join(pig_latin_words)
-
 def accept_wrapper(sock):
-    conn, addr = sock.accept()
+    conn, addr = sock.accept()  # Accept the connection from the client
     print(f"Accepted connection from {addr}")
     conn.setblocking(False)
     data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
@@ -44,18 +27,16 @@ def service_connection(key, mask):
     sock = key.fileobj
     data = key.data
     if mask & selectors.EVENT_READ:
-        recv_data = sock.recv(1024)
+        recv_data = sock.recv(1024)  # Read up to 1024 bytes
         if recv_data:
-            data.outb += recv_data
+            data.outb += recv_data  # Queue the received data for sending back
         else:
             print(f"Closing connection to {data.addr}")
             sel.unregister(sock)
             sock.close()
     if mask & selectors.EVENT_WRITE:
         if data.outb:
-            return_data = trans_to_pig_latin(data.outb.decode("utf-8"))
-            return_data = return_data.encode("utf-8")
-            sent = sock.send(return_data)
+            sent = sock.send(data.outb)  # Echo back the queued data
             data.outb = data.outb[sent:]
 
 if __name__ == "__main__":
@@ -65,6 +46,7 @@ if __name__ == "__main__":
     print("Listening on", (HOST, PORT))
     lsock.setblocking(False)
     sel.register(lsock, selectors.EVENT_READ, data=None)
+    
     try:
         while True:
             events = sel.select(timeout=None)
@@ -74,6 +56,6 @@ if __name__ == "__main__":
                 else:
                     service_connection(key, mask)
     except KeyboardInterrupt:
-        print("Caught keyboard interrupt, exiting")
+        print("Keyboard interrupt, exiting")
     finally:
         sel.close()
