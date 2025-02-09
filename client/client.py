@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 GUI Chat Client for conversation threads with live updates, new conversation,
-and message deletion (Phase 4.5 and Extensions).
+message deletion, and real-time message length feedback (Phase 4.5 and Extensions).
 Uses Tkinter to provide a login screen, a conversation list, and a chat view
 with a Treeview for selectable messages.
 Accepts command-line arguments for server host and port.
@@ -94,17 +94,31 @@ class ChatClientGUI:
         self.delete_msg_button = tk.Button(self.right_frame, text="Delete Selected Message", command=self.delete_selected_message)
         self.delete_msg_button.pack(pady=5)
         
-        # Message entry and send button for new messages
+        # Bottom frame for message entry, real-time character count, and send button.
         bottom_frame = tk.Frame(self.right_frame)
         bottom_frame.pack(pady=5)
+        # Label to show current character count.
+        self.msg_count_label = tk.Label(bottom_frame, text="0/256", fg="black")
+        self.msg_count_label.pack(side=tk.LEFT, padx=(0,5))
         self.message_entry = tk.Entry(bottom_frame, width=50)
         self.message_entry.pack(side=tk.LEFT, padx=5)
+        # Bind key release to update message count.
+        self.message_entry.bind("<KeyRelease>", self.update_msg_count)
         self.send_chat_button = tk.Button(bottom_frame, text="Send", command=self.send_chat_message)
         self.send_chat_button.pack(side=tk.LEFT)
 
         # Logout button
         self.logout_button = tk.Button(self.main_frame, text="Logout", command=self.logout)
         self.logout_button.pack(pady=5)
+
+    def update_msg_count(self, event):
+        text = self.message_entry.get()
+        length = len(text)
+        self.msg_count_label.config(text=f"{length}/256")
+        if length > 256:
+            self.msg_count_label.config(fg="red")
+        else:
+            self.msg_count_label.config(fg="white")
 
     def login(self):
         username = self.username_entry.get().strip()
@@ -140,14 +154,12 @@ class ChatClientGUI:
         threading.Thread(target=self.run_command, args=(command, self.handle_list_conversations)).start()
 
     def new_conversation(self):
-        # Use the LIST command to get all accounts.
         command = "LIST % 0 100"
         response = send_command(command)
         lines = response.splitlines()
         if len(lines) < 3:
             messagebox.showinfo("Info", "No users available")
             return
-        # The first two lines are header info; the rest are usernames.
         users = lines[2:]
         if self.session_username in users:
             users.remove(self.session_username)
@@ -200,6 +212,9 @@ class ChatClientGUI:
         msg = self.message_entry.get().strip()
         if not msg:
             messagebox.showerror("Error", "Enter a message to send")
+            return
+        if len(msg) > 256:
+            messagebox.showerror("Error", "Message too long. Maximum allowed is 256 characters.")
             return
         command = f"SEND {self.session_username} {self.session_hash} {self.current_convo} {msg}"
         threading.Thread(target=self.run_command, args=(command, self.handle_send_chat)).start()
@@ -271,6 +286,7 @@ class ChatClientGUI:
     def handle_send_chat(self, response):
         self.append_output(response)
         self.message_entry.delete(0, tk.END)
+        self.update_msg_count(None)
         if self.current_convo:
             self.load_conversation(self.current_convo)
             self.refresh_conversations()

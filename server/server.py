@@ -59,7 +59,6 @@ CREATE TABLE IF NOT EXISTS accounts (
     logged_in INTEGER DEFAULT 0
 )
 ''')
-
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,7 +89,7 @@ def process_command(command):
         return "ERROR: Empty command"
     
     cmd = tokens[0].upper()
-    
+
     # DEBUG COMMAND: SHOW_DB
     if cmd == "SHOW_DB":
         display_db_contents()
@@ -301,6 +300,9 @@ def process_command(command):
         hashed_password = tokens[2]
         recipient = tokens[3]
         message = " ".join(tokens[4:])
+        # Failsafe: Limit message size to 256 characters.
+        if len(message) > 256:
+            return "ERROR: Message too long. Maximum allowed is 256 characters."
         cursor.execute("SELECT password FROM accounts WHERE username = ?", (sender,))
         row = cursor.fetchone()
         if row is None:
@@ -357,7 +359,6 @@ def process_command(command):
             return "ERROR: Authentication failed"
         target = tokens[3]
         if target.upper() == "ALL":
-            # Delete all messages where the user is either sender or recipient.
             cursor.execute("SELECT COUNT(*) FROM messages WHERE (recipient = ? OR sender = ?)", (username, username))
             count = cursor.fetchone()[0]
             cursor.execute("DELETE FROM messages WHERE (recipient = ? OR sender = ?)", (username, username))
@@ -417,7 +418,6 @@ def accept_wrapper(sock):
 def service_connection(key, mask):
     sock = key.fileobj
     data = key.data
-
     if mask & selectors.EVENT_READ:
         recv_data = sock.recv(1024)
         if recv_data:
@@ -432,7 +432,6 @@ def service_connection(key, mask):
             print(f"Closing connection to {data.addr}")
             sel.unregister(sock)
             sock.close()
-
     if mask & selectors.EVENT_WRITE:
         if data.outb:
             sent = sock.send(data.outb)
@@ -445,7 +444,6 @@ if __name__ == "__main__":
     print("Listening on", (HOST, PORT))
     lsock.setblocking(False)
     sel.register(lsock, selectors.EVENT_READ, data=None)
-
     try:
         while True:
             events = sel.select(timeout=None)
