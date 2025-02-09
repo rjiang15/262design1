@@ -217,7 +217,6 @@ def process_command(command):
             return "ERROR: Account does not exist"
         if row[0] != hashed_password:
             return "ERROR: Authentication failed"
-        # Return only unread messages from the other user.
         cursor.execute("""
             SELECT id, sender, content FROM messages
             WHERE recipient = ? AND sender = ? AND read = 0
@@ -358,9 +357,10 @@ def process_command(command):
             return "ERROR: Authentication failed"
         target = tokens[3]
         if target.upper() == "ALL":
-            cursor.execute("SELECT COUNT(*) FROM messages WHERE recipient = ?", (username,))
+            # Delete all messages where the user is either sender or recipient.
+            cursor.execute("SELECT COUNT(*) FROM messages WHERE (recipient = ? OR sender = ?)", (username, username))
             count = cursor.fetchone()[0]
-            cursor.execute("DELETE FROM messages WHERE recipient = ?", (username,))
+            cursor.execute("DELETE FROM messages WHERE (recipient = ? OR sender = ?)", (username, username))
             conn.commit()
             return f"OK: Deleted all messages ({count} messages)"
         else:
@@ -368,9 +368,9 @@ def process_command(command):
                 msg_id = int(target)
             except ValueError:
                 return "ERROR: msg_id must be an integer or ALL"
-            cursor.execute("SELECT * FROM messages WHERE id = ? AND recipient = ?", (msg_id, username))
+            cursor.execute("SELECT * FROM messages WHERE id = ? AND (recipient = ? OR sender = ?)", (msg_id, username, username))
             if cursor.fetchone() is None:
-                return "ERROR: Message id not found"
+                return "ERROR: Message id not found or you are not authorized to delete it"
             cursor.execute("DELETE FROM messages WHERE id = ?", (msg_id,))
             conn.commit()
             return f"OK: Deleted message id {msg_id}"
