@@ -97,7 +97,7 @@ class ChatClientGUI:
         # Bottom frame for message entry, real-time character count, and send button.
         bottom_frame = tk.Frame(self.right_frame)
         bottom_frame.pack(pady=5)
-        self.msg_count_label = tk.Label(bottom_frame, text="0/256", fg="white")
+        self.msg_count_label = tk.Label(bottom_frame, text="0/256", fg="black")
         self.msg_count_label.pack(side=tk.LEFT, padx=(0,5))
         self.message_entry = tk.Entry(bottom_frame, width=50)
         self.message_entry.pack(side=tk.LEFT, padx=5)
@@ -118,7 +118,7 @@ class ChatClientGUI:
         if length > 256:
             self.msg_count_label.config(fg="red")
         else:
-            self.msg_count_label.config(fg="white")
+            self.msg_count_label.config(fg="black")
 
     def login(self):
         username = self.username_entry.get().strip()
@@ -171,6 +171,7 @@ class ChatClientGUI:
         threading.Thread(target=self.run_command, args=(command, self.handle_list_conversations)).start()
 
     def new_conversation(self):
+        # Get the full user list via the LIST command.
         command = "LIST % 0 100"
         response = send_command(command)
         lines = response.splitlines()
@@ -183,13 +184,31 @@ class ChatClientGUI:
         if not users:
             messagebox.showinfo("Info", "No other users available.")
             return
+        # Create a popup window with a search field and scrollable list.
         new_conv_win = tk.Toplevel(self.root)
         new_conv_win.title("New Conversation")
+        tk.Label(new_conv_win, text="Search for a user:").pack(pady=5)
+        search_var = tk.StringVar()
+        search_entry = tk.Entry(new_conv_win, textvariable=search_var)
+        search_entry.pack(padx=10, pady=5, fill=tk.X)
         tk.Label(new_conv_win, text="Select a user to start a conversation:").pack(pady=5)
-        listbox = tk.Listbox(new_conv_win, width=30)
-        listbox.pack(padx=10, pady=10)
-        for user in users:
+        listbox_frame = tk.Frame(new_conv_win)
+        listbox_frame.pack(padx=10, pady=5, fill=tk.BOTH, expand=True)
+        scrollbar = tk.Scrollbar(listbox_frame, orient="vertical")
+        listbox = tk.Listbox(listbox_frame, yscrollcommand=scrollbar.set, width=30)
+        scrollbar.config(command=listbox.yview)
+        scrollbar.pack(side="right", fill="y")
+        listbox.pack(side="left", fill="both", expand=True)
+        full_user_list = users[:]  # make a copy of the full list
+        for user in full_user_list:
             listbox.insert(tk.END, user)
+        def update_list(*args):
+            search_text = search_var.get().lower()
+            listbox.delete(0, tk.END)
+            for user in full_user_list:
+                if search_text in user.lower():
+                    listbox.insert(tk.END, user)
+        search_var.trace("w", update_list)
         def start_conv():
             if not listbox.curselection():
                 messagebox.showerror("Error", "Please select a user")
