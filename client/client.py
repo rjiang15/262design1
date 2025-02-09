@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 GUI Chat Client for conversation threads with live updates, new conversation,
-message deletion, and real-time message length feedback (Phase 4.5 and Extensions).
+message deletion, account deletion, and real-time message length feedback (Phase 4.5 and Extensions).
 Uses Tkinter to provide a login screen, a conversation list, and a chat view
 with a Treeview for selectable messages.
 Accepts command-line arguments for server host and port.
@@ -97,19 +97,19 @@ class ChatClientGUI:
         # Bottom frame for message entry, real-time character count, and send button.
         bottom_frame = tk.Frame(self.right_frame)
         bottom_frame.pack(pady=5)
-        # Label to show current character count.
-        self.msg_count_label = tk.Label(bottom_frame, text="0/256", fg="black")
+        self.msg_count_label = tk.Label(bottom_frame, text="0/256", fg="white")
         self.msg_count_label.pack(side=tk.LEFT, padx=(0,5))
         self.message_entry = tk.Entry(bottom_frame, width=50)
         self.message_entry.pack(side=tk.LEFT, padx=5)
-        # Bind key release to update message count.
         self.message_entry.bind("<KeyRelease>", self.update_msg_count)
         self.send_chat_button = tk.Button(bottom_frame, text="Send", command=self.send_chat_message)
         self.send_chat_button.pack(side=tk.LEFT)
 
-        # Logout button
+        # Logout and Delete Account buttons.
         self.logout_button = tk.Button(self.main_frame, text="Logout", command=self.logout)
         self.logout_button.pack(pady=5)
+        self.delete_account_button = tk.Button(self.main_frame, text="Delete Account", command=self.delete_account)
+        self.delete_account_button.pack(pady=5)
 
     def update_msg_count(self, event):
         text = self.message_entry.get()
@@ -146,6 +146,23 @@ class ChatClientGUI:
         command = f"LOGOUT {self.session_username} {self.session_hash}"
         threading.Thread(target=self.run_command, args=(command, self.handle_logout)).start()
         self.cancel_polling()
+
+    def delete_account(self):
+        if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete your account? This action cannot be undone."):
+            command = f"DELETE {self.session_username} {self.session_hash}"
+            threading.Thread(target=self.run_command, args=(command, self.handle_delete_account)).start()
+
+    def handle_delete_account(self, response):
+        if response.startswith("OK:"):
+            messagebox.showinfo("Account Deleted", "Your account has been deleted.")
+            self.session_username = None
+            self.session_hash = None
+            self.main_frame.pack_forget()
+            self.login_frame.pack(padx=10, pady=10)
+            self.chat_tree.delete(*self.chat_tree.get_children())
+            self.convo_listbox.delete(0, tk.END)
+        else:
+            messagebox.showerror("Error", response)
 
     def refresh_conversations(self):
         if self.session_username is None:

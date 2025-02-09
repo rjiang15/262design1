@@ -87,15 +87,12 @@ def process_command(command):
     tokens = command.split()
     if not tokens:
         return "ERROR: Empty command"
-    
     cmd = tokens[0].upper()
 
-    # DEBUG COMMAND: SHOW_DB
     if cmd == "SHOW_DB":
         display_db_contents()
         return "OK: Database contents displayed on server console"
-    
-    # LISTING COMMAND: LIST [pattern] [offset] [limit]
+
     elif cmd == "LIST":
         pattern = "%"
         offset = 0
@@ -125,7 +122,6 @@ def process_command(command):
             response_lines.append(row[0])
         return "\n".join(response_lines)
     
-    # LIST_CONVERSATIONS command: LIST_CONVERSATIONS username hashed_password
     elif cmd == "LIST_CONVERSATIONS":
         if len(tokens) != 3:
             return "ERROR: Usage: LIST_CONVERSATIONS username hashed_password"
@@ -145,14 +141,20 @@ def process_command(command):
             ) ORDER BY partner ASC
         """, (username, username, username))
         partners = cursor.fetchall()
-        if not partners:
-            return "OK: No conversations"
-        response_lines = []
+        valid_partners = []
         total_unread = 0
         for (partner,) in partners:
+            cursor.execute("SELECT COUNT(*) FROM accounts WHERE username = ?", (partner,))
+            if cursor.fetchone()[0] == 0:
+                continue
+            valid_partners.append(partner)
             cursor.execute("SELECT COUNT(*) FROM messages WHERE recipient = ? AND sender = ? AND read = 0", (username, partner))
             unread = cursor.fetchone()[0]
             total_unread += unread
+        if not valid_partners:
+            return "OK: No conversations"
+        response_lines = [f"Total unread messages: {total_unread}"]
+        for partner in valid_partners:
             cursor.execute("""
                 SELECT sender, content FROM messages
                 WHERE (recipient = ? AND sender = ?) OR (recipient = ? AND sender = ?)
@@ -163,11 +165,11 @@ def process_command(command):
                 last_message = f"{last[0]}: {last[1]}"
             else:
                 last_message = ""
+            cursor.execute("SELECT COUNT(*) FROM messages WHERE recipient = ? AND sender = ? AND read = 0", (username, partner))
+            unread = cursor.fetchone()[0]
             response_lines.append(f"Partner: {partner}, Unread: {unread}, Last: {last_message}")
-        response_lines.insert(0, f"Total unread messages: {total_unread}")
         return "\n".join(response_lines)
     
-    # READ_CONVO command: READ_CONVO username hashed_password other_user n
     elif cmd == "READ_CONVO":
         if len(tokens) != 5:
             return "ERROR: Usage: READ_CONVO username hashed_password other_user n"
@@ -178,6 +180,14 @@ def process_command(command):
             n = int(tokens[4])
         except ValueError:
             return "ERROR: n must be an integer"
+        # Check if other_user exists.
+        cursor.execute("SELECT COUNT(*) FROM accounts WHERE username = ?", (other_user,))
+        if cursor.fetchone()[0] == 0:
+            # Remove orphan messages.
+            cursor.execute("DELETE FROM messages WHERE (sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?)",
+                           (username, other_user, other_user, username))
+            conn.commit()
+            return f"OK: No messages in conversation with {other_user} (account deleted)"
         cursor.execute("SELECT password FROM accounts WHERE username = ?", (username,))
         row = cursor.fetchone()
         if row is None:
@@ -203,7 +213,6 @@ def process_command(command):
             conn.commit()
         return "\n".join(response_lines)
     
-    # POLL_CONVO command: POLL_CONVO username hashed_password other_user
     elif cmd == "POLL_CONVO":
         if len(tokens) != 4:
             return "ERROR: Usage: POLL_CONVO username hashed_password other_user"
@@ -235,7 +244,6 @@ def process_command(command):
             conn.commit()
         return "\n".join(response_lines)
     
-    # ACCOUNT MANAGEMENT COMMANDS
     elif cmd == "CREATE":
         if len(tokens) != 3:
             return "ERROR: Usage: CREATE username hashed_password"
@@ -288,11 +296,10 @@ def process_command(command):
         if row[0] != hashed_password:
             return "ERROR: Incorrect password"
         cursor.execute("DELETE FROM accounts WHERE username = ?", (username,))
-        cursor.execute("DELETE FROM messages WHERE recipient = ?", (username,))
+        cursor.execute("DELETE FROM messages WHERE recipient = ? OR sender = ?", (username, username))
         conn.commit()
         return "OK: Account deleted"
     
-    # MESSAGING COMMANDS
     elif cmd == "SEND":
         if len(tokens) < 5:
             return "ERROR: Usage: SEND sender hashed_password recipient message"
@@ -300,7 +307,6 @@ def process_command(command):
         hashed_password = tokens[2]
         recipient = tokens[3]
         message = " ".join(tokens[4:])
-        # Failsafe: Limit message size to 256 characters.
         if len(message) > 256:
             return "ERROR: Message too long. Maximum allowed is 256 characters."
         cursor.execute("SELECT password FROM accounts WHERE username = ?", (sender,))
@@ -408,7 +414,7 @@ def process_command(command):
         return "ERROR: Unknown command"
 
 def accept_wrapper(sock):
-    conn_sock, addr = sock.accept()  # Accept the connection from the client.
+    conn_sock, addr = sock.accept()
     print(f"Accepted connection from {addr}")
     conn_sock.setblocking(False)
     data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
