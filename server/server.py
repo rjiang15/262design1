@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Server for account and messaging functionalities (Phase 3.5 and Phase 4/4.5).
+Server for account and messaging functionalities (Phase 3.5, Phase 4 and Phase 4.5).
 Supports the following commands (each terminated with a newline):
 
   Account management:
@@ -15,11 +15,12 @@ Supports the following commands (each terminated with a newline):
     READ username hashed_password n
     DELETE_MSG username hashed_password <msg_id|ALL>
     MARK_READ username hashed_password <msg_id|ALL>
+    READ_CONVO username hashed_password other_user n
 
   Listing:
-    LIST [pattern] [offset] [limit]  
-      - Lists accounts matching the given wildcard pattern (if any), with pagination.
-  
+    LIST [pattern] [offset] [limit]
+    LIST_CONVERSATIONS username hashed_password
+
   Debugging:
     SHOW_DB   -- Display the contents of the database on the server console
 
@@ -39,7 +40,6 @@ parser = argparse.ArgumentParser(description="Start the server.")
 parser.add_argument("--host", type=str, default="127.0.0.1", help="Host IP to bind the server (default: 127.0.0.1)")
 parser.add_argument("--port", type=int, default=54400, help="Port to bind the server (default: 54400)")
 args = parser.parse_args()
-
 HOST = args.host
 PORT = args.port
 
@@ -97,13 +97,11 @@ def process_command(command):
     
     # LISTING COMMAND: LIST [pattern] [offset] [limit]
     elif cmd == "LIST":
-        # Defaults:
         pattern = "%"
         offset = 0
         limit = 10
         if len(tokens) > 1:
             pattern = tokens[1]
-            # If user did not include a SQL wildcard, add them.
             if "%" not in pattern:
                 pattern = "%" + pattern + "%"
         if len(tokens) > 2:
@@ -125,6 +123,85 @@ def process_command(command):
         response_lines = [f"Total accounts matching: {total}", "Accounts:"]
         for row in rows:
             response_lines.append(row[0])
+        return "\n".join(response_lines)
+    
+    # LIST_CONVERSATIONS command: LIST_CONVERSATIONS username hashed_password
+    elif cmd == "LIST_CONVERSATIONS":
+        if len(tokens) != 3:
+            return "ERROR: Usage: LIST_CONVERSATIONS username hashed_password"
+        username = tokens[1]
+        hashed_password = tokens[2]
+        cursor.execute("SELECT password FROM accounts WHERE username = ?", (username,))
+        row = cursor.fetchone()
+        if row is None:
+            return "ERROR: Account does not exist"
+        if row[0] != hashed_password:
+            return "ERROR: Incorrect password"
+        # Retrieve distinct conversation partners:
+        cursor.execute("""
+            SELECT partner FROM (
+                SELECT sender as partner FROM messages WHERE recipient = ?
+                UNION
+                SELECT recipient as partner FROM messages WHERE sender = ? AND recipient <> ?
+            ) ORDER BY partner ASC
+        """, (username, username, username))
+        partners = cursor.fetchall()
+        if not partners:
+            return "OK: No conversations"
+        response_lines = []
+        total_unread = 0
+        for (partner,) in partners:
+            cursor.execute("SELECT COUNT(*) FROM messages WHERE recipient = ? AND sender = ? AND read = 0", (username, partner))
+            unread = cursor.fetchone()[0]
+            total_unread += unread
+            cursor.execute("""
+                SELECT sender, content FROM messages
+                WHERE (recipient = ? AND sender = ?) OR (recipient = ? AND sender = ?)
+                ORDER BY id DESC LIMIT 1
+            """, (username, partner, partner, username))
+            last = cursor.fetchone()
+            if last:
+                last_message = f"{last[0]}: {last[1]}"
+            else:
+                last_message = ""
+            response_lines.append(f"Partner: {partner}, Unread: {unread}, Last: {last_message}")
+        response_lines.insert(0, f"Total unread messages: {total_unread}")
+        return "\n".join(response_lines)
+    
+    # READ_CONVO command: READ_CONVO username hashed_password other_user n
+    elif cmd == "READ_CONVO":
+        if len(tokens) != 5:
+            return "ERROR: Usage: READ_CONVO username hashed_password other_user n"
+        username = tokens[1]
+        hashed_password = tokens[2]
+        other_user = tokens[3]
+        try:
+            n = int(tokens[4])
+        except ValueError:
+            return "ERROR: n must be an integer"
+        cursor.execute("SELECT password FROM accounts WHERE username = ?", (username,))
+        row = cursor.fetchone()
+        if row is None:
+            return "ERROR: Account does not exist"
+        if row[0] != hashed_password:
+            return "ERROR: Authentication failed"
+        cursor.execute("""
+            SELECT id, sender, content FROM messages
+            WHERE (sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?)
+            ORDER BY id ASC LIMIT ?
+        """, (username, other_user, other_user, username, n))
+        messages = cursor.fetchall()
+        if not messages:
+            return f"OK: No messages in conversation with {other_user}"
+        response_lines = []
+        msg_ids = []
+        for msg in messages:
+            msg_id, sender, content = msg
+            response_lines.append(f"ID: {msg_id}, From: {sender}, Message: {content}")
+            msg_ids.append(msg_id)
+        if msg_ids:
+            cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq}) AND recipient = ?".format(seq=','.join(['?']*len(msg_ids))), (*msg_ids, username))
+            conn.commit()
         return "\n".join(response_lines)
     
     # ACCOUNT MANAGEMENT COMMANDS
@@ -149,10 +226,8 @@ def process_command(command):
             return "ERROR: Account does not exist"
         if row[0] != hashed_password:
             return "ERROR: Incorrect password"
-        # Mark the account as logged in.
         cursor.execute("UPDATE accounts SET logged_in = 1 WHERE username = ?", (username,))
         conn.commit()
-        # Count unread messages.
         cursor.execute("SELECT COUNT(*) FROM messages WHERE recipient = ? AND read = 0", (username,))
         count = cursor.fetchone()[0]
         return f"OK: Login successful, unread messages: {count}"
@@ -188,32 +263,27 @@ def process_command(command):
     
     # MESSAGING COMMANDS
     elif cmd == "SEND":
-        # Format: SEND sender hashed_password recipient message...
         if len(tokens) < 5:
             return "ERROR: Usage: SEND sender hashed_password recipient message"
         sender = tokens[1]
         hashed_password = tokens[2]
         recipient = tokens[3]
         message = " ".join(tokens[4:])
-        # Validate sender.
         cursor.execute("SELECT password FROM accounts WHERE username = ?", (sender,))
         row = cursor.fetchone()
         if row is None:
             return "ERROR: Sender account does not exist"
         if row[0] != hashed_password:
             return "ERROR: Sender authentication failed"
-        # Validate recipient.
         cursor.execute("SELECT * FROM accounts WHERE username = ?", (recipient,))
         if cursor.fetchone() is None:
             return "ERROR: Recipient account does not exist"
-        # Insert the message.
         cursor.execute("INSERT INTO messages (recipient, sender, content, read) VALUES (?, ?, ?, 0)", (recipient, sender, message))
         conn.commit()
         msg_id = cursor.lastrowid
         return f"OK: Message sent with id {msg_id}"
     
     elif cmd == "READ":
-        # Format: READ username hashed_password n
         if len(tokens) != 4:
             return "ERROR: Usage: READ username hashed_password n"
         username = tokens[1]
@@ -228,7 +298,6 @@ def process_command(command):
             return "ERROR: Account does not exist"
         if row[0] != hashed_password:
             return "ERROR: Authentication failed"
-        # Retrieve up to n messages (sorted by id).
         cursor.execute("SELECT id, sender, content FROM messages WHERE recipient = ? ORDER BY id ASC LIMIT ?", (username, n))
         messages = cursor.fetchall()
         if not messages:
@@ -239,13 +308,11 @@ def process_command(command):
             msg_id, sender, content = msg
             response_lines.append(f"ID: {msg_id}, From: {sender}, Message: {content}")
             msg_ids.append(msg_id)
-        # Mark these messages as read.
         cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})".format(seq=','.join(['?']*len(msg_ids))), msg_ids)
         conn.commit()
         return "\n".join(response_lines)
     
     elif cmd == "DELETE_MSG":
-        # Format: DELETE_MSG username hashed_password <msg_id|ALL>
         if len(tokens) != 4:
             return "ERROR: Usage: DELETE_MSG username hashed_password <msg_id|ALL>"
         username = tokens[1]
@@ -276,7 +343,6 @@ def process_command(command):
             return f"OK: Deleted message id {msg_id}"
     
     elif cmd == "MARK_READ":
-        # Format: MARK_READ username hashed_password <msg_id|ALL>
         if len(tokens) != 4:
             return "ERROR: Usage: MARK_READ username hashed_password <msg_id|ALL>"
         username = tokens[1]
@@ -320,10 +386,9 @@ def service_connection(key, mask):
     data = key.data
 
     if mask & selectors.EVENT_READ:
-        recv_data = sock.recv(1024)  # Read up to 1024 bytes.
+        recv_data = sock.recv(1024)
         if recv_data:
             data.inb += recv_data
-            # Process complete lines (commands end with a newline).
             while b'\n' in data.inb:
                 line, data.inb = data.inb.split(b'\n', 1)
                 command = line.decode('utf-8').strip()
