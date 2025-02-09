@@ -88,11 +88,11 @@ def process_command(command):
     if not tokens:
         return "ERROR: Empty command"
     cmd = tokens[0].upper()
-
+    
     if cmd == "SHOW_DB":
         display_db_contents()
         return "OK: Database contents displayed on server console"
-
+    
     elif cmd == "LIST":
         pattern = "%"
         offset = 0
@@ -180,10 +180,9 @@ def process_command(command):
             n = int(tokens[4])
         except ValueError:
             return "ERROR: n must be an integer"
-        # Check if other_user exists.
+        # If the conversation partner’s account no longer exists, delete orphan messages.
         cursor.execute("SELECT COUNT(*) FROM accounts WHERE username = ?", (other_user,))
         if cursor.fetchone()[0] == 0:
-            # Remove orphan messages.
             cursor.execute("DELETE FROM messages WHERE (sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?)",
                            (username, other_user, other_user, username))
             conn.commit()
