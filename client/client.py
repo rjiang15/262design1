@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Client for account and messaging functionalities (Phase 3.5 and Phase 4).
+Client for account and messaging functionalities (Phase 3.5 and Phase 4/4.5).
 Provides a menu for account management, messaging, and listing accounts.
 Passwords are hashed (SHA-256) before being sent.
 After a successful login, session credentials are stored for subsequent commands.
 """
 
+import argparse
 import socket
 import hashlib
 
-HOST = "127.0.0.1"
-PORT = 54400
+# --- Parse command-line arguments ---
+parser = argparse.ArgumentParser(description="Start the client.")
+parser.add_argument("--host", type=str, default="127.0.0.1", help="Server host to connect to (default: 127.0.0.1)")
+parser.add_argument("--port", type=int, default=54400, help="Server port to connect to (default: 54400)")
+args = parser.parse_args()
+
+HOST = args.host
+PORT = args.port
 
 def hash_password(password):
     """Return the SHA-256 hash of the given password as a hexadecimal string."""
@@ -23,7 +30,7 @@ def main():
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
-        print("Connected to server.")
+        print(f"Connected to server at {HOST}:{PORT}")
 
         while True:
             print("\nSelect an option:")
@@ -37,7 +44,7 @@ def main():
             print("8) Logout")
             print("9) Exit")
             print("10) Show Database (Debug)")
-            print("11) List Accounts")  # New option for listing accounts
+            print("11) List Accounts")
             choice = input("Enter your choice: ").strip()
 
             if choice == "9":
@@ -150,7 +157,6 @@ def main():
 
             # LIST ACCOUNTS
             elif choice == "11":
-                # Prompt for optional filtering and pagination parameters.
                 pattern = input("Enter a pattern to filter accounts (leave blank for all): ").strip()
                 if not pattern:
                     pattern = "%"

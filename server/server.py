@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Server for account and messaging functionalities (Phase 3.5 and Phase 4).
+Server for account and messaging functionalities (Phase 3.5 and Phase 4/4.5).
 Supports the following commands (each terminated with a newline):
 
   Account management:
@@ -27,15 +27,23 @@ Messages are stored in a sqlite3 database.
 Accounts include a 'logged_in' flag, and each message has a 'read' flag.
 """
 
+import argparse
 import socket
 import selectors
 import types
 import sqlite3
 import os
 
+# --- Parse command-line arguments ---
+parser = argparse.ArgumentParser(description="Start the server.")
+parser.add_argument("--host", type=str, default="127.0.0.1", help="Host IP to bind the server (default: 127.0.0.1)")
+parser.add_argument("--port", type=int, default=54400, help="Port to bind the server (default: 54400)")
+args = parser.parse_args()
+
+HOST = args.host
+PORT = args.port
+
 sel = selectors.DefaultSelector()
-HOST = "127.0.0.1"
-PORT = 54400
 
 # Build the path to the database file so that it lives in the same folder as server.py.
 db_path = os.path.join(os.path.dirname(__file__), "server.db")
