@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-GUI Client for chat with conversation threads (Phase 4.5 and Extensions).
+GUI Chat Client for conversation threads and live updates (Phase 4.5 and Extensions).
 Uses Tkinter to provide a login screen, a conversation list, and a chat view.
 Accepts command-line arguments for server host and port.
 """
@@ -41,6 +41,7 @@ class ChatClientGUI:
         self.session_username = None
         self.session_hash = None
         self.current_convo = None  # Currently selected conversation partner
+        self.polling_job = None     # ID for the after() polling job
 
         # --- Login Frame ---
         self.login_frame = tk.Frame(root)
@@ -61,7 +62,7 @@ class ChatClientGUI:
         self.status_label = tk.Label(self.main_frame, text="Not logged in")
         self.status_label.pack(pady=5)
 
-        # Left panel: Conversation list
+        # Left panel: Conversation list and account list options
         self.left_frame = tk.Frame(self.main_frame)
         self.left_frame.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.Y)
         tk.Label(self.left_frame, text="Conversations").pack()
@@ -70,6 +71,9 @@ class ChatClientGUI:
         self.convo_listbox.bind("<<ListboxSelect>>", self.on_convo_select)
         self.refresh_convo_button = tk.Button(self.left_frame, text="Refresh Conversations", command=self.refresh_conversations)
         self.refresh_convo_button.pack(pady=5)
+        # New button to start a new conversation using the full account list.
+        self.new_conv_button = tk.Button(self.left_frame, text="New Conversation", command=self.new_conversation)
+        self.new_conv_button.pack(pady=5)
 
         # Right panel: Chat view
         self.right_frame = tk.Frame(self.main_frame)
@@ -111,13 +115,50 @@ class ChatClientGUI:
             return
         command = f"LOGOUT {self.session_username} {self.session_hash}"
         threading.Thread(target=self.run_command, args=(command, self.handle_logout)).start()
+        self.cancel_polling()
 
     def refresh_conversations(self):
         if self.session_username is None:
             return
-        # Use the new command: LIST_CONVERSATIONS
         command = f"LIST_CONVERSATIONS {self.session_username} {self.session_hash}"
         threading.Thread(target=self.run_command, args=(command, self.handle_list_conversations)).start()
+
+    def new_conversation(self):
+        # Use the LIST command to get all accounts.
+        command = "LIST % 0 100"
+        response = send_command(command)
+        lines = response.splitlines()
+        if len(lines) < 3:
+            messagebox.showinfo("Info", "No users available")
+            return
+        # The first two lines are header info; the rest are usernames.
+        users = lines[2:]
+        # Exclude self.
+        if self.session_username in users:
+            users.remove(self.session_username)
+        if not users:
+            messagebox.showinfo("Info", "No other users available.")
+            return
+        # Create a pop-up window with a list of users.
+        new_conv_win = tk.Toplevel(self.root)
+        new_conv_win.title("New Conversation")
+        tk.Label(new_conv_win, text="Select a user to start a conversation:").pack(pady=5)
+        listbox = tk.Listbox(new_conv_win, width=30)
+        listbox.pack(padx=10, pady=10)
+        for user in users:
+            listbox.insert(tk.END, user)
+        def start_conv():
+            if not listbox.curselection():
+                messagebox.showerror("Error", "Please select a user")
+                return
+            index = listbox.curselection()[0]
+            partner = listbox.get(index)
+            self.current_convo = partner
+            new_conv_win.destroy()
+            self.load_conversation(partner)
+            self.start_polling_conversation()
+        start_button = tk.Button(new_conv_win, text="Start Conversation", command=start_conv)
+        start_button.pack(pady=5)
 
     def on_convo_select(self, event):
         if not self.convo_listbox.curselection():
@@ -131,11 +172,12 @@ class ChatClientGUI:
             return
         self.current_convo = partner
         self.load_conversation(partner)
+        self.start_polling_conversation()
 
     def load_conversation(self, partner):
         if self.session_username is None:
             return
-        # Use the new command: READ_CONVO
+        # Load the full conversation history using READ_CONVO.
         command = f"READ_CONVO {self.session_username} {self.session_hash} {partner} 50"
         threading.Thread(target=self.run_command, args=(command, self.handle_load_conversation)).start()
 
@@ -158,8 +200,6 @@ class ChatClientGUI:
         if response.startswith("OK:"):
             self.session_username = username
             self.session_hash = hashed
-            # Update status label with unread count from login response.
-            # (Assuming login response ends with ", unread messages: X")
             self.status_label.config(text=f"Logged in as: {self.session_username} ({response.split(',')[-1].strip()})")
             self.login_frame.pack_forget()
             self.main_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
@@ -188,15 +228,16 @@ class ChatClientGUI:
     def handle_list_conversations(self, response):
         self.convo_listbox.delete(0, tk.END)
         lines = response.splitlines()
-        # First line contains the total unread count.
         if lines:
             self.status_label.config(text=f"Logged in as: {self.session_username} ({lines[0]})")
             for line in lines[1:]:
                 self.convo_listbox.insert(tk.END, line)
 
     def handle_load_conversation(self, response):
+        # Replace the chat view with the full conversation history.
         self.chat_display.delete("1.0", tk.END)
         self.chat_display.insert(tk.END, response + "\n")
+        self.chat_display.see(tk.END)
 
     def handle_send_chat(self, response):
         self.append_output(response)
@@ -205,9 +246,33 @@ class ChatClientGUI:
             self.load_conversation(self.current_convo)
             self.refresh_conversations()
 
+    def handle_poll_response(self, response):
+        # Only append new messages.
+        if not response.startswith("OK: No new messages"):
+            self.chat_display.insert(tk.END, response + "\n")
+            self.chat_display.see(tk.END)
+            self.refresh_conversations()
+
     def append_output(self, text):
         self.chat_display.insert(tk.END, text + "\n")
         self.chat_display.see(tk.END)
+
+    # --- Polling for live updates ---
+    def start_polling_conversation(self):
+        self.cancel_polling()
+        self.poll_conversation()
+
+    def poll_conversation(self):
+        if self.session_username and self.current_convo:
+            # Use POLL_CONVO to fetch only new unread messages.
+            command = f"POLL_CONVO {self.session_username} {self.session_hash} {self.current_convo}"
+            threading.Thread(target=self.run_command, args=(command, self.handle_poll_response)).start()
+        self.polling_job = self.root.after(2000, self.poll_conversation)
+
+    def cancel_polling(self):
+        if self.polling_job:
+            self.root.after_cancel(self.polling_job)
+            self.polling_job = None
 
 if __name__ == "__main__":
     root = tk.Tk()

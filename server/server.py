@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Server for account and messaging functionalities (Phase 3.5, Phase 4 and Phase 4.5).
+Server for account and messaging functionalities (Phase 3.5, Phase 4, and Phase 4.5).
 Supports the following commands (each terminated with a newline):
 
   Account management:
@@ -16,6 +16,7 @@ Supports the following commands (each terminated with a newline):
     DELETE_MSG username hashed_password <msg_id|ALL>
     MARK_READ username hashed_password <msg_id|ALL>
     READ_CONVO username hashed_password other_user n
+    POLL_CONVO username hashed_password other_user
 
   Listing:
     LIST [pattern] [offset] [limit]
@@ -137,7 +138,6 @@ def process_command(command):
             return "ERROR: Account does not exist"
         if row[0] != hashed_password:
             return "ERROR: Incorrect password"
-        # Retrieve distinct conversation partners:
         cursor.execute("""
             SELECT partner FROM (
                 SELECT sender as partner FROM messages WHERE recipient = ?
@@ -201,6 +201,39 @@ def process_command(command):
             msg_ids.append(msg_id)
         if msg_ids:
             cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq}) AND recipient = ?".format(seq=','.join(['?']*len(msg_ids))), (*msg_ids, username))
+            conn.commit()
+        return "\n".join(response_lines)
+    
+    # POLL_CONVO command: POLL_CONVO username hashed_password other_user
+    elif cmd == "POLL_CONVO":
+        if len(tokens) != 4:
+            return "ERROR: Usage: POLL_CONVO username hashed_password other_user"
+        username = tokens[1]
+        hashed_password = tokens[2]
+        other_user = tokens[3]
+        cursor.execute("SELECT password FROM accounts WHERE username = ?", (username,))
+        row = cursor.fetchone()
+        if row is None:
+            return "ERROR: Account does not exist"
+        if row[0] != hashed_password:
+            return "ERROR: Authentication failed"
+        # Return only unread messages from the other user.
+        cursor.execute("""
+            SELECT id, sender, content FROM messages
+            WHERE recipient = ? AND sender = ? AND read = 0
+            ORDER BY id ASC
+        """, (username, other_user))
+        messages = cursor.fetchall()
+        if not messages:
+            return "OK: No new messages"
+        response_lines = []
+        msg_ids = []
+        for msg in messages:
+            msg_id, sender, content = msg
+            response_lines.append(f"ID: {msg_id}, From: {sender}, Message: {content}")
+            msg_ids.append(msg_id)
+        if msg_ids:
+            cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})".format(seq=','.join(['?']*len(msg_ids))), msg_ids)
             conn.commit()
         return "\n".join(response_lines)
     
