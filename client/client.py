@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 GUI Chat Client for conversation threads with live updates, new conversation,
-message deletion, account deletion, and real-time message length feedback (Phase 4.5 and Extensions).
+multiple message deletion, account deletion, and real-time message length feedback (Phase 4.5 and Extensions).
 Uses Tkinter to provide a login screen, a conversation list, and a chat view
 with a Treeview for selectable messages.
 Accepts command-line arguments for server host and port.
@@ -80,24 +80,30 @@ class ChatClientGUI:
         self.right_frame = tk.Frame(self.main_frame)
         self.right_frame.pack(side=tk.RIGHT, padx=5, pady=5, fill=tk.BOTH, expand=True)
         tk.Label(self.right_frame, text="Chat").pack()
-        self.chat_tree = ttk.Treeview(self.right_frame, columns=("ID", "From", "Message"), show="headings", selectmode="browse")
+        # Add an instruction label for double-clicking.
+        tk.Label(self.right_frame, text="(Double-click a message to view full text)", fg="gray", font=("Helvetica", 9)).pack(pady=(0,5))
+        # Use extended selection mode for multiple selection.
+        self.chat_tree = ttk.Treeview(self.right_frame, columns=("ID", "From", "Message"), show="headings", selectmode="extended")
         self.chat_tree.heading("ID", text="ID")
         self.chat_tree.heading("From", text="From")
         self.chat_tree.heading("Message", text="Message")
-        self.chat_tree.column("ID", width=50, anchor="center")
-        self.chat_tree.column("From", width=100, anchor="center")
-        self.chat_tree.column("Message", width=300)
+        # Fix the widths for ID and From; let Message column stretch.
+        self.chat_tree.column("ID", width=50, anchor="center", stretch=False)
+        self.chat_tree.column("From", width=100, anchor="center", stretch=False)
+        self.chat_tree.column("Message", width=600, anchor="w", stretch=True)
         self.chat_tree.pack(fill=tk.BOTH, expand=True)
         tree_scroll = tk.Scrollbar(self.right_frame, orient="vertical", command=self.chat_tree.yview)
         self.chat_tree.configure(yscroll=tree_scroll.set)
         tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        self.delete_msg_button = tk.Button(self.right_frame, text="Delete Selected Message", command=self.delete_selected_message)
+        self.delete_msg_button = tk.Button(self.right_frame, text="Delete Selected Message(s)", command=self.delete_selected_message)
         self.delete_msg_button.pack(pady=5)
+        # Bind double-click on a message to show the full message in a popup.
+        self.chat_tree.bind("<Double-1>", self.show_full_message)
         
         # Bottom frame for message entry, real-time character count, and send button.
         bottom_frame = tk.Frame(self.right_frame)
         bottom_frame.pack(pady=5)
-        self.msg_count_label = tk.Label(bottom_frame, text="0/256", fg="black")
+        self.msg_count_label = tk.Label(bottom_frame, text="0/256", fg="white", bg="black")
         self.msg_count_label.pack(side=tk.LEFT, padx=(0,5))
         self.message_entry = tk.Entry(bottom_frame, width=50)
         self.message_entry.pack(side=tk.LEFT, padx=5)
@@ -118,7 +124,7 @@ class ChatClientGUI:
         if length > 256:
             self.msg_count_label.config(fg="red")
         else:
-            self.msg_count_label.config(fg="black")
+            self.msg_count_label.config(fg="white")
 
     def login(self):
         username = self.username_entry.get().strip()
@@ -171,7 +177,6 @@ class ChatClientGUI:
         threading.Thread(target=self.run_command, args=(command, self.handle_list_conversations)).start()
 
     def new_conversation(self):
-        # Get the full user list via the LIST command.
         command = "LIST % 0 100"
         response = send_command(command)
         lines = response.splitlines()
@@ -184,7 +189,6 @@ class ChatClientGUI:
         if not users:
             messagebox.showinfo("Info", "No other users available.")
             return
-        # Create a popup window with a search field and scrollable list.
         new_conv_win = tk.Toplevel(self.root)
         new_conv_win.title("New Conversation")
         tk.Label(new_conv_win, text="Search for a user:").pack(pady=5)
@@ -199,7 +203,7 @@ class ChatClientGUI:
         scrollbar.config(command=listbox.yview)
         scrollbar.pack(side="right", fill="y")
         listbox.pack(side="left", fill="both", expand=True)
-        full_user_list = users[:]  # make a copy of the full list
+        full_user_list = users[:]  # copy the full list
         for user in full_user_list:
             listbox.insert(tk.END, user)
         def update_list(*args):
@@ -258,10 +262,14 @@ class ChatClientGUI:
     def delete_selected_message(self):
         selected = self.chat_tree.selection()
         if not selected:
-            messagebox.showerror("Error", "Please select a message to delete")
+            messagebox.showerror("Error", "Please select one or more messages to delete")
             return
-        msg_id = self.chat_tree.item(selected[0])["values"][0]
-        command = f"DELETE_MSG {self.session_username} {self.session_hash} {msg_id}"
+        msg_ids = []
+        for item in selected:
+            msg_id = self.chat_tree.item(item)["values"][0]
+            msg_ids.append(str(msg_id))
+        ids_str = ",".join(msg_ids)
+        command = f"DELETE_MSG {self.session_username} {self.session_hash} {ids_str}"
         threading.Thread(target=self.run_command, args=(command, self.handle_delete_message)).start()
 
     def run_command(self, command, callback, *args):
@@ -308,13 +316,17 @@ class ChatClientGUI:
     def handle_load_conversation(self, response):
         self.chat_tree.delete(*self.chat_tree.get_children())
         lines = response.splitlines()
+        # Use "|||" as the delimiter.
         for line in lines:
             try:
-                parts = line.split(",")
-                msg_id = parts[0].split(":")[1].strip()
-                sender = parts[1].split(":")[1].strip()
-                message = parts[2].split(":", 1)[1].strip()
-                self.chat_tree.insert("", tk.END, values=(msg_id, sender, message))
+                parts = line.split("|||")
+                if len(parts) >= 3:
+                    msg_id = parts[0].strip()
+                    sender = parts[1].strip()
+                    message = parts[2].strip()
+                    self.chat_tree.insert("", tk.END, values=(msg_id, sender, message))
+                else:
+                    self.chat_tree.insert("", tk.END, values=(line,))
             except Exception:
                 self.chat_tree.insert("", tk.END, values=(line,))
         self.chat_tree.yview_moveto(1)
@@ -338,13 +350,14 @@ class ChatClientGUI:
             lines = response.splitlines()
             for line in lines:
                 try:
-                    parts = line.split(",")
-                    msg_id = parts[0].split(":")[1].strip()
-                    sender = parts[1].split(":")[1].strip()
-                    message = parts[2].split(":", 1)[1].strip()
-                    existing_ids = [self.chat_tree.item(item)["values"][0] for item in self.chat_tree.get_children()]
-                    if msg_id not in existing_ids:
-                        self.chat_tree.insert("", tk.END, values=(msg_id, sender, message))
+                    parts = line.split("|||")
+                    if len(parts) >= 3:
+                        msg_id = parts[0].strip()
+                        sender = parts[1].strip()
+                        message = parts[2].strip()
+                        existing_ids = [self.chat_tree.item(item)["values"][0] for item in self.chat_tree.get_children()]
+                        if msg_id not in existing_ids:
+                            self.chat_tree.insert("", tk.END, values=(msg_id, sender, message))
                 except Exception:
                     continue
             self.chat_tree.yview_moveto(1)
@@ -368,6 +381,22 @@ class ChatClientGUI:
         if self.polling_job:
             self.root.after_cancel(self.polling_job)
             self.polling_job = None
+
+    def show_full_message(self, event):
+        selected = self.chat_tree.selection()
+        if not selected:
+            return
+        item = self.chat_tree.item(selected[0])
+        values = item["values"]
+        if not values or len(values) < 3:
+            return
+        full_message = values[2]
+        popup = tk.Toplevel(self.root)
+        popup.title("Full Message")
+        text_widget = tk.Text(popup, wrap="word", width=80, height=10)
+        text_widget.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+        text_widget.insert(tk.END, full_message)
+        text_widget.config(state="disabled")
 
 if __name__ == "__main__":
     root = tk.Tk()

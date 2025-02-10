@@ -89,6 +89,9 @@ def process_command(command):
         return "ERROR: Empty command"
     cmd = tokens[0].upper()
     
+    # Use "|||" as the field delimiter for message outputs.
+    delim = "|||"
+    
     if cmd == "SHOW_DB":
         display_db_contents()
         return "OK: Database contents displayed on server console"
@@ -180,7 +183,6 @@ def process_command(command):
             n = int(tokens[4])
         except ValueError:
             return "ERROR: n must be an integer"
-        # If the conversation partner’s account no longer exists, delete orphan messages.
         cursor.execute("SELECT COUNT(*) FROM accounts WHERE username = ?", (other_user,))
         if cursor.fetchone()[0] == 0:
             cursor.execute("DELETE FROM messages WHERE (sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?)",
@@ -205,7 +207,7 @@ def process_command(command):
         msg_ids = []
         for msg in messages:
             msg_id, sender, content = msg
-            response_lines.append(f"ID: {msg_id}, From: {sender}, Message: {content}")
+            response_lines.append(f"{msg_id}{delim}{sender}{delim}{content}")
             msg_ids.append(msg_id)
         if msg_ids:
             cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq}) AND recipient = ?".format(seq=','.join(['?']*len(msg_ids))), (*msg_ids, username))
@@ -236,7 +238,7 @@ def process_command(command):
         msg_ids = []
         for msg in messages:
             msg_id, sender, content = msg
-            response_lines.append(f"ID: {msg_id}, From: {sender}, Message: {content}")
+            response_lines.append(f"{msg_id}{delim}{sender}{delim}{content}")
             msg_ids.append(msg_id)
         if msg_ids:
             cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})".format(seq=','.join(['?']*len(msg_ids))), msg_ids)
@@ -345,7 +347,7 @@ def process_command(command):
         msg_ids = []
         for msg in messages:
             msg_id, sender, content = msg
-            response_lines.append(f"ID: {msg_id}, From: {sender}, Message: {content}")
+            response_lines.append(f"{msg_id}{delim}{sender}{delim}{content}")
             msg_ids.append(msg_id)
         cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})".format(seq=','.join(['?']*len(msg_ids))), msg_ids)
         conn.commit()
@@ -371,15 +373,16 @@ def process_command(command):
             return f"OK: Deleted all messages ({count} messages)"
         else:
             try:
-                msg_id = int(target)
+                id_list = [int(x.strip()) for x in target.split(",")]
             except ValueError:
-                return "ERROR: msg_id must be an integer or ALL"
-            cursor.execute("SELECT * FROM messages WHERE id = ? AND (recipient = ? OR sender = ?)", (msg_id, username, username))
-            if cursor.fetchone() is None:
-                return "ERROR: Message id not found or you are not authorized to delete it"
-            cursor.execute("DELETE FROM messages WHERE id = ?", (msg_id,))
+                return "ERROR: All message IDs must be integers or ALL"
+            for msg_id in id_list:
+                cursor.execute("SELECT * FROM messages WHERE id = ? AND (recipient = ? OR sender = ?)", (msg_id, username, username))
+                if cursor.fetchone() is None:
+                    return f"ERROR: Message id {msg_id} not found or you are not authorized to delete it"
+            cursor.execute("DELETE FROM messages WHERE id IN ({seq})".format(seq=','.join(['?']*len(id_list))), id_list)
             conn.commit()
-            return f"OK: Deleted message id {msg_id}"
+            return f"OK: Deleted message ids {','.join(map(str, id_list))}"
     
     elif cmd == "MARK_READ":
         if len(tokens) != 4:
