@@ -16,6 +16,7 @@ Supports the following commands (each terminated with a newline):
     DELETE_MSG username hashed_password <msg_id|ALL>
     MARK_READ username hashed_password <msg_id|ALL>
     READ_CONVO username hashed_password other_user n
+    READ_FULL_CONVO username hashed_password other_user n
     POLL_CONVO username hashed_password other_user
 
   Listing:
@@ -46,7 +47,7 @@ PORT = args.port
 
 sel = selectors.DefaultSelector()
 
-# Build the path to the database file so that it lives in the same folder as server.py.
+# Build the database file path relative to this script.
 db_path = os.path.join(os.path.dirname(__file__), "server.db")
 conn = sqlite3.connect(db_path, check_same_thread=False)
 cursor = conn.cursor()
@@ -72,7 +73,7 @@ CREATE TABLE IF NOT EXISTS messages (
 conn.commit()
 
 def display_db_contents():
-    """Helper function to display all contents of the database."""
+    """Prints all accounts and messages to the console."""
     print("----- Database Contents -----")
     print("Accounts:")
     for row in cursor.execute("SELECT * FROM accounts"):
@@ -83,13 +84,11 @@ def display_db_contents():
     print("----- End of Database Contents -----")
 
 def process_command(command):
-    """Parses and processes a command string and returns a response."""
+    """Parses and processes a command string; returns a response."""
     tokens = command.split()
     if not tokens:
         return "ERROR: Empty command"
     cmd = tokens[0].upper()
-    
-    # Use "|||" as the field delimiter for message outputs.
     delim = "|||"
     
     if cmd == "SHOW_DB":
@@ -128,8 +127,7 @@ def process_command(command):
     elif cmd == "LIST_CONVERSATIONS":
         if len(tokens) != 3:
             return "ERROR: Usage: LIST_CONVERSATIONS username hashed_password"
-        username = tokens[1]
-        hashed_password = tokens[2]
+        username, hashed_password = tokens[1], tokens[2]
         cursor.execute("SELECT password FROM accounts WHERE username = ?", (username,))
         row = cursor.fetchone()
         if row is None:
@@ -164,10 +162,7 @@ def process_command(command):
                 ORDER BY id DESC LIMIT 1
             """, (username, partner, partner, username))
             last = cursor.fetchone()
-            if last:
-                last_message = f"{last[0]}: {last[1]}"
-            else:
-                last_message = ""
+            last_message = f"{last[0]}: {last[1]}" if last else ""
             cursor.execute("SELECT COUNT(*) FROM messages WHERE recipient = ? AND sender = ? AND read = 0", (username, partner))
             unread = cursor.fetchone()[0]
             response_lines.append(f"Partner: {partner}, Unread: {unread}, Last: {last_message}")
@@ -176,19 +171,55 @@ def process_command(command):
     elif cmd == "READ_CONVO":
         if len(tokens) != 5:
             return "ERROR: Usage: READ_CONVO username hashed_password other_user n"
-        username = tokens[1]
-        hashed_password = tokens[2]
-        other_user = tokens[3]
+        username, hashed_password, other_user = tokens[1], tokens[2], tokens[3]
         try:
             n = int(tokens[4])
         except ValueError:
             return "ERROR: n must be an integer"
-        cursor.execute("SELECT COUNT(*) FROM accounts WHERE username = ?", (other_user,))
-        if cursor.fetchone()[0] == 0:
-            cursor.execute("DELETE FROM messages WHERE (sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?)",
-                           (username, other_user, other_user, username))
+        # First check: if there are unread messages, return only unread messages.
+        cursor.execute("""
+            SELECT COUNT(*) FROM messages
+            WHERE ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
+              AND read = 0
+            ORDER BY id ASC
+        """, (username, other_user, other_user, username))
+        unread_count = cursor.fetchone()[0]
+        if unread_count > 0:
+            cursor.execute("""
+                SELECT id, sender, content FROM messages
+                WHERE ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
+                  AND read = 0
+                ORDER BY id ASC LIMIT ?
+            """, (username, other_user, other_user, username, n))
+        else:
+            cursor.execute("""
+                SELECT id, sender, content FROM messages
+                WHERE (sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?)
+                ORDER BY id ASC LIMIT ?
+            """, (username, other_user, other_user, username, n))
+        messages = cursor.fetchall()
+        if not messages:
+            return f"OK: No messages in conversation with {other_user}"
+        response_lines = []
+        msg_ids = []
+        for msg in messages:
+            msg_id, sender, content = msg
+            response_lines.append(f"{msg_id}{delim}{sender}{delim}{content}")
+            msg_ids.append(msg_id)
+        if msg_ids:
+            cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq}) AND recipient = ?".format(seq=",".join(['?']*len(msg_ids))), (*msg_ids, username))
             conn.commit()
-            return f"OK: No messages in conversation with {other_user} (account deleted)"
+        return "\n".join(response_lines)
+    
+    elif cmd == "READ_FULL_CONVO":
+        # Return the full conversation history (read and unread) up to a limit.
+        if len(tokens) != 5:
+            return "ERROR: Usage: READ_FULL_CONVO username hashed_password other_user n"
+        username, hashed_password, other_user = tokens[1], tokens[2], tokens[3]
+        try:
+            n = int(tokens[4])
+        except ValueError:
+            return "ERROR: n must be an integer"
         cursor.execute("SELECT password FROM accounts WHERE username = ?", (username,))
         row = cursor.fetchone()
         if row is None:
@@ -204,22 +235,15 @@ def process_command(command):
         if not messages:
             return f"OK: No messages in conversation with {other_user}"
         response_lines = []
-        msg_ids = []
         for msg in messages:
             msg_id, sender, content = msg
             response_lines.append(f"{msg_id}{delim}{sender}{delim}{content}")
-            msg_ids.append(msg_id)
-        if msg_ids:
-            cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq}) AND recipient = ?".format(seq=','.join(['?']*len(msg_ids))), (*msg_ids, username))
-            conn.commit()
         return "\n".join(response_lines)
     
     elif cmd == "POLL_CONVO":
         if len(tokens) != 4:
             return "ERROR: Usage: POLL_CONVO username hashed_password other_user"
-        username = tokens[1]
-        hashed_password = tokens[2]
-        other_user = tokens[3]
+        username, hashed_password, other_user = tokens[1], tokens[2], tokens[3]
         cursor.execute("SELECT password FROM accounts WHERE username = ?", (username,))
         row = cursor.fetchone()
         if row is None:
@@ -241,7 +265,7 @@ def process_command(command):
             response_lines.append(f"{msg_id}{delim}{sender}{delim}{content}")
             msg_ids.append(msg_id)
         if msg_ids:
-            cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})".format(seq=','.join(['?']*len(msg_ids))), msg_ids)
+            cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})".format(seq=",".join(['?']*len(msg_ids))), msg_ids)
             conn.commit()
         return "\n".join(response_lines)
     
@@ -304,9 +328,7 @@ def process_command(command):
     elif cmd == "SEND":
         if len(tokens) < 5:
             return "ERROR: Usage: SEND sender hashed_password recipient message"
-        sender = tokens[1]
-        hashed_password = tokens[2]
-        recipient = tokens[3]
+        sender, hashed_password, recipient = tokens[1], tokens[2], tokens[3]
         message = " ".join(tokens[4:])
         if len(message) > 256:
             return "ERROR: Message too long. Maximum allowed is 256 characters."
@@ -327,8 +349,7 @@ def process_command(command):
     elif cmd == "READ":
         if len(tokens) != 4:
             return "ERROR: Usage: READ username hashed_password n"
-        username = tokens[1]
-        hashed_password = tokens[2]
+        username, hashed_password = tokens[1], tokens[2]
         try:
             n = int(tokens[3])
         except ValueError:
@@ -349,15 +370,14 @@ def process_command(command):
             msg_id, sender, content = msg
             response_lines.append(f"{msg_id}{delim}{sender}{delim}{content}")
             msg_ids.append(msg_id)
-        cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})".format(seq=','.join(['?']*len(msg_ids))), msg_ids)
+        cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})".format(seq=",".join(['?']*len(msg_ids))), msg_ids)
         conn.commit()
         return "\n".join(response_lines)
     
     elif cmd == "DELETE_MSG":
         if len(tokens) != 4:
             return "ERROR: Usage: DELETE_MSG username hashed_password <msg_id|ALL>"
-        username = tokens[1]
-        hashed_password = tokens[2]
+        username, hashed_password = tokens[1], tokens[2]
         cursor.execute("SELECT password FROM accounts WHERE username = ?", (username,))
         row = cursor.fetchone()
         if row is None:
@@ -380,15 +400,14 @@ def process_command(command):
                 cursor.execute("SELECT * FROM messages WHERE id = ? AND (recipient = ? OR sender = ?)", (msg_id, username, username))
                 if cursor.fetchone() is None:
                     return f"ERROR: Message id {msg_id} not found or you are not authorized to delete it"
-            cursor.execute("DELETE FROM messages WHERE id IN ({seq})".format(seq=','.join(['?']*len(id_list))), id_list)
+            cursor.execute("DELETE FROM messages WHERE id IN ({seq})".format(seq=",".join(['?']*len(id_list))), id_list)
             conn.commit()
             return f"OK: Deleted message ids {','.join(map(str, id_list))}"
     
     elif cmd == "MARK_READ":
         if len(tokens) != 4:
             return "ERROR: Usage: MARK_READ username hashed_password <msg_id|ALL>"
-        username = tokens[1]
-        hashed_password = tokens[2]
+        username, hashed_password = tokens[1], tokens[2]
         cursor.execute("SELECT password FROM accounts WHERE username = ?", (username,))
         row = cursor.fetchone()
         if row is None:
