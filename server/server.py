@@ -47,7 +47,7 @@ PORT = args.port
 
 sel = selectors.DefaultSelector()
 
-# Build the database file path relative to this script.
+# Build the database file path so that it lives in the same folder as server.py.
 db_path = os.path.join(os.path.dirname(__file__), "server.db")
 conn = sqlite3.connect(db_path, check_same_thread=False)
 cursor = conn.cursor()
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS messages (
 conn.commit()
 
 def display_db_contents():
-    """Prints all accounts and messages to the console."""
+    """Helper function to display all contents of the database."""
     print("----- Database Contents -----")
     print("Accounts:")
     for row in cursor.execute("SELECT * FROM accounts"):
@@ -84,7 +84,7 @@ def display_db_contents():
     print("----- End of Database Contents -----")
 
 def process_command(command):
-    """Parses and processes a command string; returns a response."""
+    """Parses and processes a command string and returns a response."""
     tokens = command.split()
     if not tokens:
         return "ERROR: Empty command"
@@ -176,7 +176,6 @@ def process_command(command):
             n = int(tokens[4])
         except ValueError:
             return "ERROR: n must be an integer"
-        # First check: if there are unread messages, return only unread messages.
         cursor.execute("""
             SELECT COUNT(*) FROM messages
             WHERE ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
@@ -206,13 +205,13 @@ def process_command(command):
             msg_id, sender, content = msg
             response_lines.append(f"{msg_id}{delim}{sender}{delim}{content}")
             msg_ids.append(msg_id)
+            print(f"Message {msg_id} read by {username}")
         if msg_ids:
             cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq}) AND recipient = ?".format(seq=",".join(['?']*len(msg_ids))), (*msg_ids, username))
             conn.commit()
         return "\n".join(response_lines)
     
     elif cmd == "READ_FULL_CONVO":
-        # Return the full conversation history (read and unread) up to a limit.
         if len(tokens) != 5:
             return "ERROR: Usage: READ_FULL_CONVO username hashed_password other_user n"
         username, hashed_password, other_user = tokens[1], tokens[2], tokens[3]
@@ -264,6 +263,7 @@ def process_command(command):
             msg_id, sender, content = msg
             response_lines.append(f"{msg_id}{delim}{sender}{delim}{content}")
             msg_ids.append(msg_id)
+            print(f"Message {msg_id} read by {username} (via poll)")
         if msg_ids:
             cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})".format(seq=",".join(['?']*len(msg_ids))), msg_ids)
             conn.commit()
@@ -294,6 +294,7 @@ def process_command(command):
         conn.commit()
         cursor.execute("SELECT COUNT(*) FROM messages WHERE recipient = ? AND read = 0", (username,))
         count = cursor.fetchone()[0]
+        print(f"User {username} logged in at {HOST}:{PORT}")
         return f"OK: Login successful, unread messages: {count}"
     
     elif cmd == "LOGOUT":
@@ -308,6 +309,7 @@ def process_command(command):
             return "ERROR: Incorrect password"
         cursor.execute("UPDATE accounts SET logged_in = 0 WHERE username = ?", (username,))
         conn.commit()
+        print(f"User {username} logged out")
         return "OK: Logged out"
     
     elif cmd == "DELETE":
@@ -344,6 +346,7 @@ def process_command(command):
         cursor.execute("INSERT INTO messages (recipient, sender, content, read) VALUES (?, ?, ?, 0)", (recipient, sender, message))
         conn.commit()
         msg_id = cursor.lastrowid
+        print(f"Message sent: from {sender} to {recipient}, id {msg_id}")
         return f"OK: Message sent with id {msg_id}"
     
     elif cmd == "READ":
@@ -370,6 +373,7 @@ def process_command(command):
             msg_id, sender, content = msg
             response_lines.append(f"{msg_id}{delim}{sender}{delim}{content}")
             msg_ids.append(msg_id)
+            print(f"Message {msg_id} read by {username}")
         cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})".format(seq=",".join(['?']*len(msg_ids))), msg_ids)
         conn.commit()
         return "\n".join(response_lines)
@@ -429,14 +433,15 @@ def process_command(command):
                 return "ERROR: Message id not found"
             cursor.execute("UPDATE messages SET read = 1 WHERE id = ?", (msg_id,))
             conn.commit()
+            print(f"Message {msg_id} marked as read by {username}")
             return f"OK: Marked message id {msg_id} as read"
     
     else:
         return "ERROR: Unknown command"
 
 def accept_wrapper(sock):
+    # No longer printing accepted connection messages.
     conn_sock, addr = sock.accept()
-    print(f"Accepted connection from {addr}")
     conn_sock.setblocking(False)
     data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
     events = selectors.EVENT_READ | selectors.EVENT_WRITE
@@ -456,7 +461,7 @@ def service_connection(key, mask):
                     response = process_command(command)
                     data.outb += (response + "\n").encode('utf-8')
         else:
-            print(f"Closing connection to {data.addr}")
+            # Do not print closing connection messages.
             sel.unregister(sock)
             sock.close()
     if mask & selectors.EVENT_WRITE:
@@ -468,7 +473,7 @@ if __name__ == "__main__":
     lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     lsock.bind((HOST, PORT))
     lsock.listen()
-    print("Listening on", (HOST, PORT))
+    print(f"Listening on {HOST}:{PORT}")
     lsock.setblocking(False)
     sel.register(lsock, selectors.EVENT_READ, data=None)
     try:
