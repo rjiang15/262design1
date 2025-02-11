@@ -184,6 +184,9 @@ def process_command(command):
         """, (username, other_user, other_user, username))
         unread_count = cursor.fetchone()[0]
         if unread_count > 0:
+            # Enforce that the client request must not exceed available unread messages.
+            if n > unread_count:
+                return f"ERROR: The allowed maximum value is {unread_count}. Please try again."
             cursor.execute("""
                 SELECT id, sender, content FROM messages
                 WHERE ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
@@ -276,7 +279,7 @@ def process_command(command):
         cursor.execute("SELECT * FROM accounts WHERE username = ?", (username,))
         if cursor.fetchone() is not None:
             return "ERROR: Account already exists"
-        # New: Ensure any lingering messages associated with this username are deleted.
+        # Ensure any lingering messages associated with this username are deleted.
         cursor.execute("DELETE FROM messages WHERE recipient = ? OR sender = ?", (username, username))
         cursor.execute("INSERT INTO accounts (username, password, logged_in) VALUES (?, ?, 0)", (username, hashed_password))
         conn.commit()
@@ -442,7 +445,7 @@ def process_command(command):
         return "ERROR: Unknown command"
 
 def accept_wrapper(sock):
-    # Do not print connection accepted messages.
+    # Do not print accepted connection messages.
     conn_sock, addr = sock.accept()
     conn_sock.setblocking(False)
     data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")

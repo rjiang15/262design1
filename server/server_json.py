@@ -148,7 +148,12 @@ def process_command_json(cmd):
             username = cmd["username"]
             hashed_password = cmd["hashed_password"]
             other_user = cmd["other_user"]
-            n = int(cmd["n"])
+            try:
+                n = int(cmd["n"])
+            except ValueError:
+                resp["status"] = "ERROR"
+                resp["message"] = "n must be an integer"
+                return resp
             cursor.execute("""
                 SELECT COUNT(*) FROM messages
                 WHERE ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
@@ -157,6 +162,10 @@ def process_command_json(cmd):
             """, (username, other_user, other_user, username))
             unread_count = cursor.fetchone()[0]
             if unread_count > 0:
+                if n > unread_count:
+                    resp["status"] = "ERROR"
+                    resp["message"] = f"The allowed maximum value is {unread_count}. Please try again."
+                    return resp
                 cursor.execute("""
                     SELECT id, sender, content FROM messages
                     WHERE ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
@@ -182,7 +191,8 @@ def process_command_json(cmd):
                     msg_ids.append(msg_id)
                     print(f"Message {msg_id} read by {username}")
                 if msg_ids:
-                    cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq}) AND recipient = ?".format(seq=",".join(['?']*len(msg_ids))), (*msg_ids, username))
+                    cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq}) AND recipient = ?"
+                                   .format(seq=",".join(['?']*len(msg_ids))), (*msg_ids, username))
                     conn.commit()
                 resp["status"] = "OK"
                 resp["messages"] = msgs
@@ -191,7 +201,12 @@ def process_command_json(cmd):
             username = cmd["username"]
             hashed_password = cmd["hashed_password"]
             other_user = cmd["other_user"]
-            n = int(cmd["n"])
+            try:
+                n = int(cmd["n"])
+            except ValueError:
+                resp["status"] = "ERROR"
+                resp["message"] = "n must be an integer"
+                return resp
             cursor.execute("SELECT password FROM accounts WHERE username = ?", (username,))
             row = cursor.fetchone()
             if row is None:
@@ -249,7 +264,8 @@ def process_command_json(cmd):
                         msg_ids.append(msg_id)
                         print(f"Message {msg_id} read by {username} (via poll)")
                     if msg_ids:
-                        cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})".format(seq=",".join(['?']*len(msg_ids))), msg_ids)
+                        cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})"
+                                       .format(seq=",".join(['?']*len(msg_ids))), msg_ids)
                         conn.commit()
                     resp["status"] = "OK"
                     resp["messages"] = msgs
@@ -330,30 +346,36 @@ def process_command_json(cmd):
             hashed_password = cmd["hashed_password"]
             recipient = cmd["recipient"]
             message = cmd["message"]
+            # Disallow empty messages.
+            if len(message.strip()) == 0:
+                resp["status"] = "ERROR"
+                resp["message"] = "Empty message not allowed."
+                return resp
             if len(message) > 256:
                 resp["status"] = "ERROR"
                 resp["message"] = "Message too long. Maximum allowed is 256 characters."
+                return resp
+            cursor.execute("SELECT password FROM accounts WHERE username = ?", (sender,))
+            row = cursor.fetchone()
+            if row is None:
+                resp["status"] = "ERROR"
+                resp["message"] = "Sender account does not exist"
+            elif row[0] != hashed_password:
+                resp["status"] = "ERROR"
+                resp["message"] = "Sender authentication failed"
             else:
-                cursor.execute("SELECT password FROM accounts WHERE username = ?", (sender,))
-                row = cursor.fetchone()
-                if row is None:
+                cursor.execute("SELECT * FROM accounts WHERE username = ?", (recipient,))
+                if cursor.fetchone() is None:
                     resp["status"] = "ERROR"
-                    resp["message"] = "Sender account does not exist"
-                elif row[0] != hashed_password:
-                    resp["status"] = "ERROR"
-                    resp["message"] = "Sender authentication failed"
+                    resp["message"] = "Recipient account does not exist"
                 else:
-                    cursor.execute("SELECT * FROM accounts WHERE username = ?", (recipient,))
-                    if cursor.fetchone() is None:
-                        resp["status"] = "ERROR"
-                        resp["message"] = "Recipient account does not exist"
-                    else:
-                        cursor.execute("INSERT INTO messages (recipient, sender, content, read) VALUES (?, ?, ?, 0)", (recipient, sender, message))
-                        conn.commit()
-                        msg_id = cursor.lastrowid
-                        print(f"Message sent: from {sender} to {recipient}, id {msg_id}")
-                        resp["status"] = "OK"
-                        resp["message"] = f"Message sent with id {msg_id}"
+                    cursor.execute("INSERT INTO messages (recipient, sender, content, read) VALUES (?, ?, ?, 0)",
+                                   (recipient, sender, message))
+                    conn.commit()
+                    msg_id = cursor.lastrowid
+                    print(f"Message sent: from {sender} to {recipient}, id {msg_id}")
+                    resp["status"] = "OK"
+                    resp["message"] = f"Message sent with id {msg_id}"
         
         elif command == "READ":
             username = cmd["username"]
@@ -368,7 +390,8 @@ def process_command_json(cmd):
                 resp["status"] = "ERROR"
                 resp["message"] = "Authentication failed"
             else:
-                cursor.execute("SELECT id, sender, content FROM messages WHERE recipient = ? ORDER BY id ASC LIMIT ?", (username, n))
+                cursor.execute("SELECT id, sender, content FROM messages WHERE recipient = ? ORDER BY id ASC LIMIT ?",
+                               (username, n))
                 messages = cursor.fetchall()
                 if not messages:
                     resp["status"] = "OK"
@@ -381,7 +404,8 @@ def process_command_json(cmd):
                         msgs.append({"id": msg_id, "sender": sender, "content": content})
                         msg_ids.append(msg_id)
                         print(f"Message {msg_id} read by {username}")
-                    cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})".format(seq=",".join(['?']*len(msg_ids))), msg_ids)
+                    cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})"
+                                   .format(seq=",".join(['?']*len(msg_ids))), msg_ids)
                     conn.commit()
                     resp["status"] = "OK"
                     resp["messages"] = msgs
