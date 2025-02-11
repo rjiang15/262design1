@@ -276,6 +276,8 @@ def process_command(command):
         cursor.execute("SELECT * FROM accounts WHERE username = ?", (username,))
         if cursor.fetchone() is not None:
             return "ERROR: Account already exists"
+        # New: Ensure any lingering messages associated with this username are deleted.
+        cursor.execute("DELETE FROM messages WHERE recipient = ? OR sender = ?", (username, username))
         cursor.execute("INSERT INTO accounts (username, password, logged_in) VALUES (?, ?, 0)", (username, hashed_password))
         conn.commit()
         return "OK: Account created"
@@ -440,7 +442,7 @@ def process_command(command):
         return "ERROR: Unknown command"
 
 def accept_wrapper(sock):
-    # No longer printing accepted connection messages.
+    # Do not print connection accepted messages.
     conn_sock, addr = sock.accept()
     conn_sock.setblocking(False)
     data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
