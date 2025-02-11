@@ -12,6 +12,7 @@ import hashlib
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 import threading
+import re
 
 # --- Parse command-line arguments ---
 parser = argparse.ArgumentParser(description="Start the GUI chat client.")
@@ -198,7 +199,7 @@ class ChatClientGUI:
         scrollbar = tk.Scrollbar(listbox_frame, orient="vertical")
         listbox = tk.Listbox(listbox_frame, yscrollcommand=scrollbar.set, width=30)
         scrollbar.config(command=listbox.yview)
-        scrollbar.pack(side="right", fill="y")
+        scrollbar.pack(side="right", fill=tk.Y)
         listbox.pack(side="left", fill="both", expand=True)
         full_user_list = users[:]  # copy full list
         for user in full_user_list:
@@ -218,7 +219,6 @@ class ChatClientGUI:
             partner = listbox.get(index)
             self.current_convo = partner
             new_conv_win.destroy()
-            # For a new conversation, load full history.
             self.load_full_conversation(partner, 50)
             self.suppress_polling = False
             self.start_polling_conversation()
@@ -230,7 +230,6 @@ class ChatClientGUI:
             return
         index = self.convo_listbox.curselection()[0]
         selected_text = self.convo_listbox.get(index)
-        # Expected format: "Partner: bob, Unread: 5, Last: bob: Hi!"
         try:
             parts = selected_text.split(",")
             partner = parts[0].split(":")[1].strip()
@@ -241,7 +240,6 @@ class ChatClientGUI:
             unread = 0
         self.current_convo = partner
         if unread > 0:
-            # When there are unread messages, prompt the user.
             self.suppress_polling = True
             self.prompt_for_unread_messages(partner, unread)
         else:
@@ -259,8 +257,7 @@ class ChatClientGUI:
         if num is None:
             return
         self.load_unread_messages(partner, num)
-        # Immediately refresh conversations so that unread counters update.
-        self.refresh_conversations()
+        self.refresh_conversations()  # refresh counters immediately
         self.suppress_polling = True
 
     def load_unread_messages(self, partner, n):
@@ -277,6 +274,19 @@ class ChatClientGUI:
         threading.Thread(target=self.run_command, args=(command, self.handle_load_conversation)).start()
 
     def handle_append_new_messages(self, response, *args):
+        # Check for error message from server.
+        if response.startswith("ERROR:"):
+            if "The allowed maximum value is" in response:
+                messagebox.showerror("Error", response)
+                # Extract allowed maximum from response and re-prompt.
+                m = re.search(r"The allowed maximum value is (\d+)", response)
+                if m:
+                    allowed = int(m.group(1))
+                    self.prompt_for_unread_messages(self.current_convo, allowed)
+            else:
+                messagebox.showerror("Error", response)
+            return
+
         new_messages = []
         lines = response.splitlines()
         for line in lines:
@@ -296,9 +306,9 @@ class ChatClientGUI:
             if msg[0] not in existing_ids:
                 self.chat_tree.insert("", tk.END, values=msg)
         self.chat_tree.yview_moveto(1)
+        self.refresh_conversations()  # update unread counters after appending
 
     def handle_load_conversation(self, response, *args):
-        # Clear and reload full conversation.
         new_messages = []
         lines = response.splitlines()
         for line in lines:
@@ -376,7 +386,6 @@ class ChatClientGUI:
         if response.startswith("OK:"):
             self.session_username = username
             self.session_hash = hashed
-            # Update header with the unread count (from the first line of LIST_CONVERSATIONS).
             self.status_label.config(text=f"Logged in as: {self.session_username} ({response.split(',')[-1].strip()})")
             self.login_frame.pack_forget()
             self.main_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
@@ -406,7 +415,6 @@ class ChatClientGUI:
         self.convo_listbox.delete(0, tk.END)
         lines = response.splitlines()
         if lines:
-            # Update header with current unread total.
             self.status_label.config(text=f"Logged in as: {self.session_username} ({lines[0]})")
             for line in lines[1:]:
                 self.convo_listbox.insert(tk.END, line)

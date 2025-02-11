@@ -14,6 +14,7 @@ import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 import threading
 import json
+import re
 
 # --- Parse command-line arguments ---
 parser = argparse.ArgumentParser(description="Start the JSON GUI chat client.")
@@ -275,6 +276,18 @@ class ChatClientGUI:
         threading.Thread(target=self.run_command, args=(cmd, self.handle_load_conversation)).start()
 
     def handle_append_new_messages(self, response, *args):
+        # Check for error message from server.
+        if response.get("status", "").startswith("ERROR"):
+            if "The allowed maximum value is" in response.get("message", ""):
+                messagebox.showerror("Error", response.get("message"))
+                m = re.search(r"The allowed maximum value is (\d+)", response.get("message", ""))
+                if m:
+                    allowed = int(m.group(1))
+                    self.prompt_for_unread_messages(self.current_convo, allowed)
+            else:
+                messagebox.showerror("Error", response.get("message", "Unknown error"))
+            return
+
         new_messages = []
         for msg in response.get("messages", []):
             new_messages.append((msg["id"], msg["sender"], msg["content"]))
@@ -320,7 +333,7 @@ class ChatClientGUI:
             return
         msg = self.message_entry.get().strip()
         if not msg:
-            messagebox.showerror("Error", "Enter a message to send")
+            messagebox.showerror("Error", "Empty message not allowed.")
             return
         if len(msg) > 256:
             messagebox.showerror("Error", "Message too long. Maximum allowed is 256 characters.")
