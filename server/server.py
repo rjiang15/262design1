@@ -57,6 +57,7 @@ conn = sqlite3.connect(db_path, check_same_thread=False)
 cursor = conn.cursor()
 
 # Create tables if they don't exist.
+# Accounts Table
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS accounts (
     username TEXT PRIMARY KEY,
@@ -64,6 +65,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     logged_in INTEGER DEFAULT 0
 )
 ''')
+# Messages Table
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,12 +94,14 @@ def process_command(command):
     if not tokens:
         return "ERROR: Empty command"
     cmd = tokens[0].upper()
-    delim = "|||"
+    delim = "|||" # custom delimiter for custom wire protocol
     
+    # unaccessible command now that the client is put together, but leftover remant from debugging
     if cmd == "SHOW_DB":
         display_db_contents()
         return "OK: Database contents displayed on server console"
     
+    # also unaccessible command now, but this was in during the initial phases where the UI was a text based interface
     elif cmd == "LIST":
         pattern = "%"
         offset = 0
