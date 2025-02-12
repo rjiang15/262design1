@@ -47,6 +47,10 @@ PORT = args.port
 
 sel = selectors.DefaultSelector()
 
+# Global counters for tracking bytes (server side)
+server_total_bytes_sent = 0
+server_total_bytes_received = 0
+
 # Build the database file path so that it lives in the same folder as server.py.
 db_path = os.path.join(os.path.dirname(__file__), "server.db")
 conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -84,7 +88,6 @@ def display_db_contents():
     print("----- End of Database Contents -----")
 
 def process_command(command):
-    """Parses and processes a command string and returns a response."""
     tokens = command.split()
     if not tokens:
         return "ERROR: Empty command"
@@ -184,7 +187,6 @@ def process_command(command):
         """, (username, other_user, other_user, username))
         unread_count = cursor.fetchone()[0]
         if unread_count > 0:
-            # Enforce that the client request must not exceed available unread messages.
             if n > unread_count:
                 return f"ERROR: The allowed maximum value is {unread_count}. Please try again."
             cursor.execute("""
@@ -210,7 +212,8 @@ def process_command(command):
             msg_ids.append(msg_id)
             print(f"Message {msg_id} read by {username}")
         if msg_ids:
-            cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq}) AND recipient = ?".format(seq=",".join(['?']*len(msg_ids))), (*msg_ids, username))
+            cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq}) AND recipient = ?"
+                           .format(seq=",".join(['?']*len(msg_ids))), (*msg_ids, username))
             conn.commit()
         return "\n".join(response_lines)
     
@@ -268,7 +271,8 @@ def process_command(command):
             msg_ids.append(msg_id)
             print(f"Message {msg_id} read by {username} (via poll)")
         if msg_ids:
-            cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})".format(seq=",".join(['?']*len(msg_ids))), msg_ids)
+            cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})"
+                           .format(seq=",".join(['?']*len(msg_ids))), msg_ids)
             conn.commit()
         return "\n".join(response_lines)
     
@@ -279,7 +283,7 @@ def process_command(command):
         cursor.execute("SELECT * FROM accounts WHERE username = ?", (username,))
         if cursor.fetchone() is not None:
             return "ERROR: Account already exists"
-        # Ensure any lingering messages associated with this username are deleted.
+        # Remove any lingering messages for this username.
         cursor.execute("DELETE FROM messages WHERE recipient = ? OR sender = ?", (username, username))
         cursor.execute("INSERT INTO accounts (username, password, logged_in) VALUES (?, ?, 0)", (username, hashed_password))
         conn.commit()
@@ -445,7 +449,7 @@ def process_command(command):
         return "ERROR: Unknown command"
 
 def accept_wrapper(sock):
-    # Do not print accepted connection messages.
+    # Do not print connection accepted messages.
     conn_sock, addr = sock.accept()
     conn_sock.setblocking(False)
     data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
@@ -453,11 +457,13 @@ def accept_wrapper(sock):
     sel.register(conn_sock, events, data=data)
 
 def service_connection(key, mask):
+    global server_total_bytes_sent, server_total_bytes_received
     sock = key.fileobj
     data = key.data
     if mask & selectors.EVENT_READ:
         recv_data = sock.recv(1024)
         if recv_data:
+            server_total_bytes_received += len(recv_data)
             data.inb += recv_data
             while b'\n' in data.inb:
                 line, data.inb = data.inb.split(b'\n', 1)
@@ -466,12 +472,13 @@ def service_connection(key, mask):
                     response = process_command(command)
                     data.outb += (response + "\n").encode('utf-8')
         else:
-            # Do not print closing connection messages.
+            print(f"Closing connection to {data.addr}")
             sel.unregister(sock)
             sock.close()
     if mask & selectors.EVENT_WRITE:
         if data.outb:
             sent = sock.send(data.outb)
+            server_total_bytes_sent += sent
             data.outb = data.outb[sent:]
 
 if __name__ == "__main__":
@@ -492,5 +499,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Keyboard interrupt, exiting")
     finally:
+        print(f"Server total bytes sent: {server_total_bytes_sent} bytes")
+        print(f"Server total bytes received: {server_total_bytes_received} bytes")
         sel.close()
         conn.close()

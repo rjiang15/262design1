@@ -35,6 +35,10 @@ PORT = args.port
 
 sel = selectors.DefaultSelector()
 
+# Global counters for JSON server
+server_total_bytes_sent = 0
+server_total_bytes_received = 0
+
 # Use a separate database file for the JSON server.
 db_path = os.path.join(os.path.dirname(__file__), "server_json.db")
 conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -72,7 +76,6 @@ def display_db_contents():
     print("----- End of Database Contents -----")
 
 def process_command_json(cmd):
-    """Processes a command (as a dict) and returns a dict response."""
     command = cmd.get("command", "").upper()
     resp = {}
     try:
@@ -404,8 +407,7 @@ def process_command_json(cmd):
                         msgs.append({"id": msg_id, "sender": sender, "content": content})
                         msg_ids.append(msg_id)
                         print(f"Message {msg_id} read by {username}")
-                    cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})"
-                                   .format(seq=",".join(['?']*len(msg_ids))), msg_ids)
+                    cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})".format(seq=",".join(['?']*len(msg_ids))), msg_ids)
                     conn.commit()
                     resp["status"] = "OK"
                     resp["messages"] = msgs
@@ -501,13 +503,14 @@ def accept_wrapper(sock):
     sel.register(conn_sock, events, data=data)
 
 def service_connection(key, mask):
+    global server_total_bytes_sent, server_total_bytes_received
     sock = key.fileobj
     data = key.data
     if mask & selectors.EVENT_READ:
         recv_data = sock.recv(4096)
         if recv_data:
+            server_total_bytes_received += len(recv_data)
             data.inb += recv_data
-            # Each JSON message is delimited by newline.
             while b'\n' in data.inb:
                 line, data.inb = data.inb.split(b'\n', 1)
                 try:
@@ -524,6 +527,7 @@ def service_connection(key, mask):
     if mask & selectors.EVENT_WRITE:
         if data.outb:
             sent = sock.send(data.outb)
+            server_total_bytes_sent += sent
             data.outb = data.outb[sent:]
 
 if __name__ == "__main__":
@@ -544,5 +548,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Keyboard interrupt, exiting")
     finally:
+        print(f"Server total bytes sent: {server_total_bytes_sent} bytes")
+        print(f"Server total bytes received: {server_total_bytes_received} bytes")
         sel.close()
         conn.close()
