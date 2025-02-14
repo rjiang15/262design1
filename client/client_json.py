@@ -4,7 +4,7 @@
 JSON GUI Chat Client for conversation threads with live updates, new conversation,
 and dynamic unread counters. Uses Tkinter to provide a separate login screen and a chat view.
 All communication is done with JSON objects.
-Accepts command-line arguments for server host and port.
+Each request sent includes a "version" field (set to "1.0").
 """
 
 import argparse
@@ -28,14 +28,18 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def send_command_json(cmd):
+    # Ensure every command includes the version field.
+    if "version" not in cmd:
+        cmd["version"] = "1.0"
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((SERVER_HOST, SERVER_PORT))
-            s.sendall((json.dumps(cmd) + "\n").encode("utf-8"))
+            msg = (json.dumps(cmd) + "\n").encode("utf-8")
+            s.sendall(msg)
             data = s.recv(4096).decode("utf-8")
             return json.loads(data.strip())
     except Exception as e:
-        return {"status": "ERROR", "message": str(e)}
+        return {"version": "1.0", "status": "ERROR", "message": str(e)}
 
 class ChatClientGUI:
     def __init__(self, root):
@@ -133,7 +137,7 @@ class ChatClientGUI:
             messagebox.showerror("Error", "Please enter username and password")
             return
         hashed = hash_password(password)
-        cmd = {"command": "LOGIN", "username": username, "hashed_password": hashed}
+        cmd = {"version": "1.0", "command": "LOGIN", "username": username, "hashed_password": hashed}
         threading.Thread(target=self.run_command, args=(cmd, self.handle_login, username, hashed)).start()
 
     def create_account(self):
@@ -143,20 +147,20 @@ class ChatClientGUI:
             messagebox.showerror("Error", "Please enter username and password")
             return
         hashed = hash_password(password)
-        cmd = {"command": "CREATE", "username": username, "hashed_password": hashed}
+        cmd = {"version": "1.0", "command": "CREATE", "username": username, "hashed_password": hashed}
         threading.Thread(target=self.run_command, args=(cmd, self.handle_create_account)).start()
 
     def logout(self):
         if self.session_username is None:
             return
-        cmd = {"command": "LOGOUT", "username": self.session_username, "hashed_password": self.session_hash}
+        cmd = {"version": "1.0", "command": "LOGOUT", "username": self.session_username, "hashed_password": self.session_hash}
         threading.Thread(target=self.run_command, args=(cmd, self.handle_logout)).start()
         self.cancel_polling()
         self.suppress_polling = False
 
     def delete_account(self):
         if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete your account? This action cannot be undone."):
-            cmd = {"command": "DELETE", "username": self.session_username, "hashed_password": self.session_hash}
+            cmd = {"version": "1.0", "command": "DELETE", "username": self.session_username, "hashed_password": self.session_hash}
             threading.Thread(target=self.run_command, args=(cmd, self.handle_delete_account)).start()
 
     def handle_delete_account(self, response, *args):
@@ -174,11 +178,11 @@ class ChatClientGUI:
     def refresh_conversations(self):
         if self.session_username is None:
             return
-        cmd = {"command": "LIST_CONVERSATIONS", "username": self.session_username, "hashed_password": self.session_hash}
+        cmd = {"version": "1.0", "command": "LIST_CONVERSATIONS", "username": self.session_username, "hashed_password": self.session_hash}
         threading.Thread(target=self.run_command, args=(cmd, self.handle_list_conversations)).start()
 
     def new_conversation(self):
-        cmd = {"command": "LIST", "pattern": "%", "offset": 0, "limit": 100}
+        cmd = {"version": "1.0", "command": "LIST", "pattern": "%", "offset": 0, "limit": 100}
         response = send_command_json(cmd)
         if "accounts" not in response:
             messagebox.showinfo("Info", "No users available")
@@ -265,18 +269,17 @@ class ChatClientGUI:
     def load_unread_messages(self, partner, n):
         if self.session_username is None:
             return
-        cmd = {"command": "READ_CONVO", "username": self.session_username, "hashed_password": self.session_hash, "other_user": partner, "n": n}
+        cmd = {"version": "1.0", "command": "READ_CONVO", "username": self.session_username, "hashed_password": self.session_hash, "other_user": partner, "n": n}
         threading.Thread(target=self.run_command, args=(cmd, self.handle_append_new_messages)).start()
 
     def load_full_conversation(self, partner, n):
         if self.session_username is None:
             return
-        cmd = {"command": "READ_FULL_CONVO", "username": self.session_username, "hashed_password": self.session_hash, "other_user": partner, "n": n}
+        cmd = {"version": "1.0", "command": "READ_FULL_CONVO", "username": self.session_username, "hashed_password": self.session_hash, "other_user": partner, "n": n}
         self.chat_tree.delete(*self.chat_tree.get_children())
         threading.Thread(target=self.run_command, args=(cmd, self.handle_load_conversation)).start()
 
     def handle_append_new_messages(self, response, *args):
-        # Check for error message from server.
         if response.get("status", "").startswith("ERROR"):
             if "The allowed maximum value is" in response.get("message", ""):
                 messagebox.showerror("Error", response.get("message"))
@@ -296,7 +299,7 @@ class ChatClientGUI:
             if msg[0] not in existing_ids:
                 self.chat_tree.insert("", tk.END, values=msg)
         self.chat_tree.yview_moveto(1)
-        self.refresh_conversations()  # update unread counters after appending
+        self.refresh_conversations()
 
     def handle_load_conversation(self, response, *args):
         new_messages = []
@@ -308,7 +311,7 @@ class ChatClientGUI:
         self.chat_tree.yview_moveto(1)
 
     def view_more_messages(self):
-        cmd = {"command": "LIST_CONVERSATIONS", "username": self.session_username, "hashed_password": self.session_hash}
+        cmd = {"version": "1.0", "command": "LIST_CONVERSATIONS", "username": self.session_username, "hashed_password": self.session_hash}
         response = send_command_json(cmd)
         unread = 0
         for conv in response.get("conversations", []):
@@ -338,7 +341,7 @@ class ChatClientGUI:
         if len(msg) > 256:
             messagebox.showerror("Error", "Message too long. Maximum allowed is 256 characters.")
             return
-        cmd = {"command": "SEND", "sender": self.session_username, "hashed_password": self.session_hash, "recipient": self.current_convo, "message": msg}
+        cmd = {"version": "1.0", "command": "SEND", "sender": self.session_username, "hashed_password": self.session_hash, "recipient": self.current_convo, "message": msg}
         threading.Thread(target=self.run_command, args=(cmd, self.handle_send_chat)).start()
 
     def delete_selected_message(self):
@@ -351,7 +354,7 @@ class ChatClientGUI:
             msg_id = self.chat_tree.item(item)["values"][0]
             msg_ids.append(str(msg_id))
         target = ",".join(msg_ids)
-        cmd = {"command": "DELETE_MSG", "username": self.session_username, "hashed_password": self.session_hash, "target": target}
+        cmd = {"version": "1.0", "command": "DELETE_MSG", "username": self.session_username, "hashed_password": self.session_hash, "target": target}
         threading.Thread(target=self.run_command, args=(cmd, self.handle_delete_message)).start()
 
     def run_command(self, cmd, callback, *args):
@@ -435,7 +438,7 @@ class ChatClientGUI:
 
     def poll_conversation(self):
         if self.session_username and self.current_convo and not self.suppress_polling:
-            cmd = {"command": "POLL_CONVO", "username": self.session_username, "hashed_password": self.session_hash, "other_user": self.current_convo}
+            cmd = {"version": "1.0", "command": "POLL_CONVO", "username": self.session_username, "hashed_password": self.session_hash, "other_user": self.current_convo}
             threading.Thread(target=self.run_command, args=(cmd, self.handle_poll_response)).start()
         self.polling_job = self.root.after(2000, self.poll_conversation)
 

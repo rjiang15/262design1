@@ -4,6 +4,7 @@
 JSON Server for account and messaging functionalities.
 This version uses JSON messages over the wire.
 All commands and responses are JSON objects.
+Each JSON packet is required to include a "version" field (set to "1.0").
 The supported commands (sent as JSON) include:
   - Account management: CREATE, LOGIN, DELETE, LOGOUT
   - Messaging: SEND, READ, DELETE_MSG, MARK_READ, READ_CONVO, READ_FULL_CONVO, POLL_CONVO
@@ -11,10 +12,10 @@ The supported commands (sent as JSON) include:
   - Debug: SHOW_DB
 
 For example, to create an account, the client sends:
-  {"command": "CREATE", "username": "bob", "hashed_password": "..."}
+  {"version": "1.0", "command": "CREATE", "username": "bob", "hashed_password": "..."}
 
 Responses are returned as JSON, for example:
-  {"status": "OK", "message": "Account created"}
+  {"version": "1.0", "status": "OK", "message": "Account created"}
 """
 
 import argparse
@@ -76,8 +77,13 @@ def display_db_contents():
     print("----- End of Database Contents -----")
 
 def process_command_json(cmd):
+    # Check version first
+    if cmd.get("version") != "1.0":
+        return {"version": "1.0", "status": "ERROR", "message": "Unsupported or missing protocol version"}
+    
     command = cmd.get("command", "").upper()
-    resp = {}
+    # Prepare response with the same version.
+    resp = {"version": "1.0"}
     try:
         if command == "SHOW_DB":
             display_db_contents()
@@ -511,12 +517,13 @@ def service_connection(key, mask):
         if recv_data:
             server_total_bytes_received += len(recv_data)
             data.inb += recv_data
+            # Each JSON message is delimited by newline.
             while b'\n' in data.inb:
                 line, data.inb = data.inb.split(b'\n', 1)
                 try:
                     cmd = json.loads(line.decode('utf-8').strip())
                 except Exception as e:
-                    response = {"status": "ERROR", "message": f"JSON parse error: {str(e)}"}
+                    response = {"version": "1.0", "status": "ERROR", "message": f"JSON parse error: {str(e)}"}
                     data.outb += (json.dumps(response) + "\n").encode("utf-8")
                     continue
                 response = process_command_json(cmd)

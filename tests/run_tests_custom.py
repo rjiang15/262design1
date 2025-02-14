@@ -12,13 +12,18 @@ RESET = "\033[0m"
 HOST = "127.0.0.1"
 PORT = 54400
 
+# For the custom protocol, every packet must begin with the version number.
+PROTOCOL_VERSION = "1.0"
+
 def send_command(command):
-    """Send a command string (terminated by newline) to the server and return its response."""
+    """Prepend the version and send a command string (terminated by newline) to the server and return its response."""
+    full_command = f"{PROTOCOL_VERSION} {command}"
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((HOST, PORT))
-            s.sendall((command + "\n").encode("utf-8"))
+            s.sendall((full_command + "\n").encode("utf-8"))
             data = s.recv(4096).decode("utf-8")
+            # The server strips off the version before sending the response so we can just return the response.
             return data.strip()
     except Exception as e:
         return f"ERROR: {e}"
