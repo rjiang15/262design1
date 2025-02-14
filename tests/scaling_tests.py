@@ -147,4 +147,6 @@ def run_scaling_test(k):
 
 if __name__ == "__main__":
     print(f"Running scaling tests using {protocol.upper()} protocol on {HOST}:{PORT}")
-    run_scaling_test(10) # number of accounts
+    for k in [10, 20, 30, 40]:
+        print("Now running on " +  str(k) + " accounts")
+        run_scaling_test(k) # number of accounts
