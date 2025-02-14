@@ -176,7 +176,7 @@ def run_scaling_test():
     total_bytes_received = 0
     # Create 10 accounts: TestUser1, TestUser2, ... TestUser10.
     hashed = "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8"
-    accounts = [f"TestUser{i}" for i in range(1, 11)]
+    accounts = [f"TestUser{i}" for i in range(1, 21)]
     for user in accounts:
         create_account(user, hashed)
     # For each unique pair, have the lower-indexed account send "hello" to the higher-indexed account.

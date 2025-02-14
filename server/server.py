@@ -57,7 +57,6 @@ conn = sqlite3.connect(db_path, check_same_thread=False)
 cursor = conn.cursor()
 
 # Create tables if they don't exist.
-# Accounts Table
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS accounts (
     username TEXT PRIMARY KEY,
@@ -65,7 +64,6 @@ CREATE TABLE IF NOT EXISTS accounts (
     logged_in INTEGER DEFAULT 0
 )
 ''')
-# Messages Table
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,18 +88,24 @@ def display_db_contents():
     print("----- End of Database Contents -----")
 
 def process_command(command):
+    # Split the command into tokens.
     tokens = command.split()
     if not tokens:
         return "ERROR: Empty command"
-    cmd = tokens[0].upper()
-    delim = "|||" # custom delimiter for custom wire protocol
     
-    # unaccessible command now that the client is put together, but leftover remant from debugging
+    # Expect the first token to be the protocol version.
+    version = tokens.pop(0)
+    if version != "1.0":
+        return "ERROR: Unsupported protocol version"
+    
+    # Now process the rest of the command.
+    cmd = tokens[0].upper()
+    delim = "|||"
+    
     if cmd == "SHOW_DB":
         display_db_contents()
         return "OK: Database contents displayed on server console"
     
-    # also unaccessible command now, but this was in during the initial phases where the UI was a text based interface
     elif cmd == "LIST":
         pattern = "%"
         offset = 0
@@ -216,8 +220,7 @@ def process_command(command):
             msg_ids.append(msg_id)
             print(f"Message {msg_id} read by {username}")
         if msg_ids:
-            cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq}) AND recipient = ?"
-                           .format(seq=",".join(['?']*len(msg_ids))), (*msg_ids, username))
+            cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq}) AND recipient = ?".format(seq=",".join(['?']*len(msg_ids))), (*msg_ids, username))
             conn.commit()
         return "\n".join(response_lines)
     
@@ -275,8 +278,7 @@ def process_command(command):
             msg_ids.append(msg_id)
             print(f"Message {msg_id} read by {username} (via poll)")
         if msg_ids:
-            cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})"
-                           .format(seq=",".join(['?']*len(msg_ids))), msg_ids)
+            cursor.execute("UPDATE messages SET read = 1 WHERE id IN ({seq})".format(seq=",".join(['?']*len(msg_ids))), msg_ids)
             conn.commit()
         return "\n".join(response_lines)
     
@@ -453,7 +455,7 @@ def process_command(command):
         return "ERROR: Unknown command"
 
 def accept_wrapper(sock):
-    # Do not print connection accepted messages.
+    # Do not print accepted connection messages.
     conn_sock, addr = sock.accept()
     conn_sock.setblocking(False)
     data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")

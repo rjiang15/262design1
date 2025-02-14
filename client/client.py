@@ -22,47 +22,50 @@ args = parser.parse_args()
 SERVER_HOST = args.host
 SERVER_PORT = args.port
 
-# --- Helper Functions ---
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def send_command(command):
+    """
+    Prepend the protocol version and send a command over the custom protocol.
+    """
+    version = "1.0"
+    full_command = f"{version} {command}\n"
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((SERVER_HOST, SERVER_PORT))
-            s.sendall((command + "\n").encode("utf-8"))
+            s.sendall(full_command.encode("utf-8"))
             data = s.recv(4096).decode("utf-8")
             return data.strip()
     except Exception as e:
         return f"ERROR: {e}"
 
-# --- Building the Chat ---
+# --- Building the Chat Client GUI ---
 class ChatClientGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Chat Client")
-        self.session_username = None    # start logged out
+        self.session_username = None    # not logged in initially
         self.session_hash = None
-        self.current_convo = None   # currently selected conversation partner
-        self.polling_job = None     # for live updates
-        # When loading unread messages via prompt, suppress live polling.
-        self.suppress_polling = False
+        self.current_convo = None       # currently selected conversation partner
+        self.polling_job = None         # for live updates
+        self.suppress_polling = False   # when prompting for unread messages
 
-        # --- Login Frame (visible initially) ---
+        # --- Login Frame ---
         self.login_frame = tk.Frame(root)
         self.login_frame.pack(padx=10, pady=10)
         tk.Label(self.login_frame, text="Username:").grid(row=0, column=0, sticky="e")
         self.username_entry = tk.Entry(self.login_frame)
         self.username_entry.grid(row=0, column=1)
         tk.Label(self.login_frame, text="Password:").grid(row=1, column=0, sticky="e")
-        self.password_entry = tk.Entry(self.login_frame, show="*") # hide password input
+        self.password_entry = tk.Entry(self.login_frame, show="*")
         self.password_entry.grid(row=1, column=1)
         self.login_button = tk.Button(self.login_frame, text="Login", command=self.login)
         self.login_button.grid(row=2, column=0, pady=5)
         self.create_button = tk.Button(self.login_frame, text="Create Account", command=self.create_account)
         self.create_button.grid(row=2, column=1, pady=5)
 
-        # --- Main Frame (hidden until login) ---
+        # --- Main Frame ---
         self.main_frame = tk.Frame(root)
         self.status_label = tk.Label(self.main_frame, text="Not logged in")
         self.status_label.pack(pady=5)
@@ -74,10 +77,8 @@ class ChatClientGUI:
         self.convo_listbox = tk.Listbox(self.left_frame, width=30)
         self.convo_listbox.pack(fill=tk.Y, expand=True)
         self.convo_listbox.bind("<<ListboxSelect>>", self.on_convo_select)
-        # Refresh Conversations Button
         self.refresh_convo_button = tk.Button(self.left_frame, text="Refresh Conversations", command=self.refresh_conversations)
         self.refresh_convo_button.pack(pady=5)
-        # New Conversations Button
         self.new_conv_button = tk.Button(self.left_frame, text="New Conversation", command=self.new_conversation)
         self.new_conv_button.pack(pady=5)
 
@@ -97,10 +98,9 @@ class ChatClientGUI:
         tree_scroll = tk.Scrollbar(self.right_frame, orient="vertical", command=self.chat_tree.yview)
         self.chat_tree.configure(yscroll=tree_scroll.set)
         tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        # Delete Message Button
         self.delete_msg_button = tk.Button(self.right_frame, text="Delete Selected Message(s)", command=self.delete_selected_message)
         self.delete_msg_button.pack(pady=5)
-        self.chat_tree.bind("<Double-1>", self.show_full_message) # Enable Double Click Open
+        self.chat_tree.bind("<Double-1>", self.show_full_message)
         
         # "View More" button.
         self.view_more_button = tk.Button(self.right_frame, text="View More", command=self.view_more_messages)
@@ -114,7 +114,6 @@ class ChatClientGUI:
         self.message_entry = tk.Entry(bottom_frame, width=50)
         self.message_entry.pack(side=tk.LEFT, padx=5)
         self.message_entry.bind("<KeyRelease>", self.update_msg_count)
-        # Send Message Button
         self.send_chat_button = tk.Button(bottom_frame, text="Send", command=self.send_chat_message)
         self.send_chat_button.pack(side=tk.LEFT)
 
@@ -124,13 +123,11 @@ class ChatClientGUI:
         self.delete_account_button = tk.Button(self.main_frame, text="Delete Account", command=self.delete_account)
         self.delete_account_button.pack(pady=5)
 
-    # Next to the message send box, ensures users will keep messages below 256 chars
     def update_msg_count(self, event):
         text = self.message_entry.get()
         length = len(text)
         self.msg_count_label.config(text=f"{length}/256", fg="red" if length > 256 else "white")
 
-    # Login Function
     def login(self):
         username = self.username_entry.get().strip()
         password = self.password_entry.get().strip()
@@ -141,7 +138,6 @@ class ChatClientGUI:
         command = f"LOGIN {username} {hashed}"
         threading.Thread(target=self.run_command, args=(command, self.handle_login, username, hashed)).start()
 
-    # Create Account Function
     def create_account(self):
         username = self.username_entry.get().strip()
         password = self.password_entry.get().strip()
@@ -152,7 +148,6 @@ class ChatClientGUI:
         command = f"CREATE {username} {hashed}"
         threading.Thread(target=self.run_command, args=(command, self.handle_create_account)).start()
 
-    # Logout Function
     def logout(self):
         if self.session_username is None:
             return
@@ -161,13 +156,11 @@ class ChatClientGUI:
         self.cancel_polling()
         self.suppress_polling = False
 
-    # Delete Account Function - Popup
     def delete_account(self):
         if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete your account? This action cannot be undone."):
             command = f"DELETE {self.session_username} {self.session_hash}"
             threading.Thread(target=self.run_command, args=(command, self.handle_delete_account)).start()
 
-    # Delete Account Function - Deletion
     def handle_delete_account(self, response):
         if response.startswith("OK:"):
             messagebox.showinfo("Account Deleted", "Your account has been deleted.")
@@ -180,16 +173,14 @@ class ChatClientGUI:
         else:
             messagebox.showerror("Error", response)
 
-    # Refresh Conversations Function
     def refresh_conversations(self):
         if self.session_username is None:
             return
         command = f"LIST_CONVERSATIONS {self.session_username} {self.session_hash}"
         threading.Thread(target=self.run_command, args=(command, self.handle_list_conversations)).start()
 
-    # Create New Conversation and handles listing
     def new_conversation(self):
-        command = "LIST % 0 100"
+        command = f"LIST % 0 100"
         response = send_command(command)
         lines = response.splitlines()
         if len(lines) < 3:
@@ -218,8 +209,6 @@ class ChatClientGUI:
         full_user_list = users[:]  # copy full list
         for user in full_user_list:
             listbox.insert(tk.END, user)
-
-        # Helper for Updating the List
         def update_list(*args):
             search_text = search_var.get().lower()
             listbox.delete(0, tk.END)
@@ -227,8 +216,6 @@ class ChatClientGUI:
                 if search_text in user.lower():
                     listbox.insert(tk.END, user)
         search_var.trace("w", update_list)
-
-        # Helper for starting conversation with selected user
         def start_conv():
             if not listbox.curselection():
                 messagebox.showerror("Error", "Please select a user")
@@ -243,7 +230,6 @@ class ChatClientGUI:
         start_button = tk.Button(new_conv_win, text="Start Conversation", command=start_conv)
         start_button.pack(pady=5)
 
-    # Pull up the conversation and check for unread messages
     def on_convo_select(self, event):
         if not self.convo_listbox.curselection():
             return
@@ -258,7 +244,6 @@ class ChatClientGUI:
             partner = selected_text
             unread = 0
         self.current_convo = partner
-        # Polling updates based on heuristics from notebook
         if unread > 0:
             self.suppress_polling = True
             self.prompt_for_unread_messages(partner, unread)
@@ -267,7 +252,6 @@ class ChatClientGUI:
             self.suppress_polling = False
             self.start_polling_conversation()
 
-    # If unread messages - prompt user
     def prompt_for_unread_messages(self, partner, unread):
         num = tk.simpledialog.askinteger("Unread Messages",
                                          f"This conversation with {partner} has {unread} unread messages.\n"
@@ -281,14 +265,12 @@ class ChatClientGUI:
         self.refresh_conversations()  # refresh counters immediately
         self.suppress_polling = True
 
-    # After user selects number of unread messages, load n of them
     def load_unread_messages(self, partner, n):
         if self.session_username is None:
             return
         command = f"READ_CONVO {self.session_username} {self.session_hash} {partner} {n}"
         threading.Thread(target=self.run_command, args=(command, self.handle_append_new_messages)).start()
 
-    # Load the full conversation
     def load_full_conversation(self, partner, n):
         if self.session_username is None:
             return
@@ -296,13 +278,11 @@ class ChatClientGUI:
         self.chat_tree.delete(*self.chat_tree.get_children())
         threading.Thread(target=self.run_command, args=(command, self.handle_load_conversation)).start()
 
-    # After a new message, append to chat
     def handle_append_new_messages(self, response, *args):
         # Check for error message from server.
         if response.startswith("ERROR:"):
             if "The allowed maximum value is" in response:
                 messagebox.showerror("Error", response)
-                # Extract allowed maximum from response and re-prompt.
                 m = re.search(r"The allowed maximum value is (\d+)", response)
                 if m:
                     allowed = int(m.group(1))
@@ -332,7 +312,6 @@ class ChatClientGUI:
         self.chat_tree.yview_moveto(1)
         self.refresh_conversations()  # update unread counters after appending
 
-    # Load the conversation in
     def handle_load_conversation(self, response, *args):
         new_messages = []
         lines = response.splitlines()
@@ -353,7 +332,6 @@ class ChatClientGUI:
             self.chat_tree.insert("", tk.END, values=msg)
         self.chat_tree.yview_moveto(1)
 
-    # Handle View More Button
     def view_more_messages(self):
         response = send_command(f"LIST_CONVERSATIONS {self.session_username} {self.session_hash}")
         lines = response.splitlines()
@@ -372,13 +350,11 @@ class ChatClientGUI:
             self.suppress_polling = False
             self.start_polling_conversation()
 
-    # Load conversation Function
     def load_conversation(self, partner):
         self.load_full_conversation(partner, 50)
         self.suppress_polling = False
         self.start_polling_conversation()
 
-    # Sending Function
     def send_chat_message(self):
         if self.session_username is None or not self.current_convo:
             messagebox.showerror("Error", "No conversation selected")
@@ -393,7 +369,6 @@ class ChatClientGUI:
         command = f"SEND {self.session_username} {self.session_hash} {self.current_convo} {msg}"
         threading.Thread(target=self.run_command, args=(command, self.handle_send_chat)).start()
 
-    # Delete Message Conversation
     def delete_selected_message(self):
         selected = self.chat_tree.selection()
         if not selected:
@@ -407,12 +382,10 @@ class ChatClientGUI:
         command = f"DELETE_MSG {self.session_username} {self.session_hash} {ids_str}"
         threading.Thread(target=self.run_command, args=(command, self.handle_delete_message)).start()
 
-    # Run Command
     def run_command(self, command, callback, *args):
         response = send_command(command)
         self.root.after(0, callback, response, *args)
 
-    # Authentication
     def handle_login(self, response, username, hashed):
         if response.startswith("OK:"):
             self.session_username = username
@@ -424,14 +397,12 @@ class ChatClientGUI:
         else:
             messagebox.showerror("Login Failed", response)
 
-    # Popup for account creation
     def handle_create_account(self, response):
         if response.startswith("OK:"):
             messagebox.showinfo("Account Created", "Account successfully created. You can now log in.")
         else:
             messagebox.showerror("Error", response)
 
-    # Popup for logout
     def handle_logout(self, response):
         if response.startswith("OK:"):
             self.session_username = None
@@ -444,7 +415,6 @@ class ChatClientGUI:
         else:
             messagebox.showerror("Error", response)
 
-    # Create session
     def handle_list_conversations(self, response):
         self.convo_listbox.delete(0, tk.END)
         lines = response.splitlines()
@@ -453,7 +423,6 @@ class ChatClientGUI:
             for line in lines[1:]:
                 self.convo_listbox.insert(tk.END, line)
 
-    # Logic for sending chats
     def handle_send_chat(self, response):
         self.append_output(response)
         self.message_entry.delete(0, tk.END)
@@ -464,14 +433,12 @@ class ChatClientGUI:
             self.refresh_conversations()
             self.start_polling_conversation()
 
-    # Logic for deletion
     def handle_delete_message(self, response):
         self.append_output(response)
         if self.current_convo:
             self.load_full_conversation(self.current_convo, 50)
             self.refresh_conversations()
 
-    # Check polling if new messages, parse through custom deimiter
     def handle_poll_response(self, response):
         if self.suppress_polling:
             return
