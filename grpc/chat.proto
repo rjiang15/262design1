@@ -1,0 +1,147 @@
+syntax = "proto3";
+
+package chat;
+
+service ChatService {
+  // Account management
+  rpc CreateAccount(CreateAccountRequest) returns (CreateAccountResponse);
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  rpc DeleteAccount(DeleteAccountRequest) returns (DeleteAccountResponse);
+
+  // Messaging
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+  rpc ReadMessages(ReadMessagesRequest) returns (ReadMessagesResponse);
+  rpc ReadConversation(ReadConversationRequest) returns (ReadConversationResponse);
+  rpc PollConversation(PollConversationRequest) returns (PollConversationResponse);
+
+  // Listing
+  rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
+  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
+}
+
+message CreateAccountRequest {
+  string username = 1;
+  string hashed_password = 2;
+}
+
+message CreateAccountResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message LoginRequest {
+  string username = 1;
+  string hashed_password = 2;
+}
+
+message LoginResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message LogoutRequest {
+  string username = 1;
+  string hashed_password = 2;
+}
+
+message LogoutResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteAccountRequest {
+  string username = 1;
+  string hashed_password = 2;
+}
+
+message DeleteAccountResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message SendMessageRequest {
+  string sender = 1;
+  string hashed_password = 2;
+  string recipient = 3;
+  string content = 4;
+}
+
+message SendMessageResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ReadMessagesRequest {
+  string username = 1;
+  string hashed_password = 2;
+  int32 n = 3;
+}
+
+message Message {
+  int32 id = 1;
+  string sender = 2;
+  string content = 3;
+}
+
+message ReadMessagesResponse {
+  bool success = 1;
+  repeated Message messages = 2;
+  string message = 3;
+}
+
+message ReadConversationRequest {
+  string username = 1;
+  string hashed_password = 2;
+  string other_user = 3;
+  int32 n = 4;
+}
+
+message ReadConversationResponse {
+  bool success = 1;
+  repeated Message messages = 2;
+  string message = 3;
+}
+
+message PollConversationRequest {
+  string username = 1;
+  string hashed_password = 2;
+  string other_user = 3;
+}
+
+message PollConversationResponse {
+  bool success = 1;
+  repeated Message messages = 2;
+  string message = 3;
+}
+
+message ListConversationsRequest {
+  string username = 1;
+  string hashed_password = 2;
+}
+
+message Conversation {
+  string partner = 1;
+  int32 unread = 2;
+  string last_message = 3;
+}
+
+message ListConversationsResponse {
+  bool success = 1;
+  int32 total_unread = 2;
+  repeated Conversation conversations = 3;
+  string message = 4;
+}
+
+message ListAccountsRequest {
+  string pattern = 1;
+  int32 offset = 2;
+  int32 limit = 3;
+}
+
+message ListAccountsResponse {
+  bool success = 1;
+  int32 total_accounts = 2;
+  repeated string accounts = 3;
+  string message = 4;
+}
