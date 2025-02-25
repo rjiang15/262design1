@@ -4,6 +4,7 @@ import grpc
 import warnings
 
 import chat_pb2 as chat__pb2
+from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 
 GRPC_GENERATED_VERSION = '1.70.0'
 GRPC_VERSION = grpc.__version__
@@ -26,7 +27,8 @@ if _version_not_supported:
 
 
 class ChatServiceStub(object):
-    """Missing associated documentation comment in .proto file."""
+    """The ChatService: all RPCs replicate the custom commands from server.py
+    """
 
     def __init__(self, channel):
         """Constructor.
@@ -34,60 +36,130 @@ class ChatServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.CreateAccount = channel.unary_unary(
-                '/chat.ChatService/CreateAccount',
-                request_serializer=chat__pb2.CreateAccountRequest.SerializeToString,
-                response_deserializer=chat__pb2.CreateAccountResponse.FromString,
+        self.ShowDB = channel.unary_unary(
+                '/chat.ChatService/ShowDB',
+                request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+                response_deserializer=chat__pb2.ShowDBResponse.FromString,
                 _registered_method=True)
-        self.Login = channel.unary_unary(
-                '/chat.ChatService/Login',
-                request_serializer=chat__pb2.LoginRequest.SerializeToString,
-                response_deserializer=chat__pb2.LoginResponse.FromString,
-                _registered_method=True)
-        self.Logout = channel.unary_unary(
-                '/chat.ChatService/Logout',
-                request_serializer=chat__pb2.LogoutRequest.SerializeToString,
-                response_deserializer=chat__pb2.LogoutResponse.FromString,
-                _registered_method=True)
-        self.DeleteAccount = channel.unary_unary(
-                '/chat.ChatService/DeleteAccount',
-                request_serializer=chat__pb2.DeleteAccountRequest.SerializeToString,
-                response_deserializer=chat__pb2.DeleteAccountResponse.FromString,
-                _registered_method=True)
-        self.SendMessage = channel.unary_unary(
-                '/chat.ChatService/SendMessage',
-                request_serializer=chat__pb2.SendMessageRequest.SerializeToString,
-                response_deserializer=chat__pb2.SendMessageResponse.FromString,
-                _registered_method=True)
-        self.ReadMessages = channel.unary_unary(
-                '/chat.ChatService/ReadMessages',
-                request_serializer=chat__pb2.ReadMessagesRequest.SerializeToString,
-                response_deserializer=chat__pb2.ReadMessagesResponse.FromString,
-                _registered_method=True)
-        self.ReadConversation = channel.unary_unary(
-                '/chat.ChatService/ReadConversation',
-                request_serializer=chat__pb2.ReadConversationRequest.SerializeToString,
-                response_deserializer=chat__pb2.ReadConversationResponse.FromString,
-                _registered_method=True)
-        self.PollConversation = channel.unary_unary(
-                '/chat.ChatService/PollConversation',
-                request_serializer=chat__pb2.PollConversationRequest.SerializeToString,
-                response_deserializer=chat__pb2.PollConversationResponse.FromString,
+        self.List = channel.unary_unary(
+                '/chat.ChatService/List',
+                request_serializer=chat__pb2.ListRequest.SerializeToString,
+                response_deserializer=chat__pb2.ListResponse.FromString,
                 _registered_method=True)
         self.ListConversations = channel.unary_unary(
                 '/chat.ChatService/ListConversations',
                 request_serializer=chat__pb2.ListConversationsRequest.SerializeToString,
                 response_deserializer=chat__pb2.ListConversationsResponse.FromString,
                 _registered_method=True)
-        self.ListAccounts = channel.unary_unary(
-                '/chat.ChatService/ListAccounts',
-                request_serializer=chat__pb2.ListAccountsRequest.SerializeToString,
-                response_deserializer=chat__pb2.ListAccountsResponse.FromString,
+        self.ReadInbox = channel.unary_unary(
+                '/chat.ChatService/ReadInbox',
+                request_serializer=chat__pb2.ReadInboxRequest.SerializeToString,
+                response_deserializer=chat__pb2.ReadInboxResponse.FromString,
+                _registered_method=True)
+        self.ReadConvo = channel.unary_unary(
+                '/chat.ChatService/ReadConvo',
+                request_serializer=chat__pb2.ReadConvoRequest.SerializeToString,
+                response_deserializer=chat__pb2.ReadConvoResponse.FromString,
+                _registered_method=True)
+        self.ReadFullConvo = channel.unary_unary(
+                '/chat.ChatService/ReadFullConvo',
+                request_serializer=chat__pb2.ReadConvoRequest.SerializeToString,
+                response_deserializer=chat__pb2.ReadConvoResponse.FromString,
+                _registered_method=True)
+        self.PollConvo = channel.unary_unary(
+                '/chat.ChatService/PollConvo',
+                request_serializer=chat__pb2.PollConvoRequest.SerializeToString,
+                response_deserializer=chat__pb2.PollConvoResponse.FromString,
+                _registered_method=True)
+        self.CreateAccount = channel.unary_unary(
+                '/chat.ChatService/CreateAccount',
+                request_serializer=chat__pb2.AccountRequest.SerializeToString,
+                response_deserializer=chat__pb2.Response.FromString,
+                _registered_method=True)
+        self.Login = channel.unary_unary(
+                '/chat.ChatService/Login',
+                request_serializer=chat__pb2.AccountRequest.SerializeToString,
+                response_deserializer=chat__pb2.Response.FromString,
+                _registered_method=True)
+        self.Logout = channel.unary_unary(
+                '/chat.ChatService/Logout',
+                request_serializer=chat__pb2.AccountRequest.SerializeToString,
+                response_deserializer=chat__pb2.Response.FromString,
+                _registered_method=True)
+        self.DeleteAccount = channel.unary_unary(
+                '/chat.ChatService/DeleteAccount',
+                request_serializer=chat__pb2.AccountRequest.SerializeToString,
+                response_deserializer=chat__pb2.Response.FromString,
+                _registered_method=True)
+        self.SendMessage = channel.unary_unary(
+                '/chat.ChatService/SendMessage',
+                request_serializer=chat__pb2.SendMessageRequest.SerializeToString,
+                response_deserializer=chat__pb2.Response.FromString,
+                _registered_method=True)
+        self.DeleteMessage = channel.unary_unary(
+                '/chat.ChatService/DeleteMessage',
+                request_serializer=chat__pb2.DeleteMessageRequest.SerializeToString,
+                response_deserializer=chat__pb2.Response.FromString,
+                _registered_method=True)
+        self.MarkRead = channel.unary_unary(
+                '/chat.ChatService/MarkRead',
+                request_serializer=chat__pb2.MarkReadRequest.SerializeToString,
+                response_deserializer=chat__pb2.Response.FromString,
                 _registered_method=True)
 
 
 class ChatServiceServicer(object):
-    """Missing associated documentation comment in .proto file."""
+    """The ChatService: all RPCs replicate the custom commands from server.py
+    """
+
+    def ShowDB(self, request, context):
+        """Debug command: replicate SHOW_DB
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def List(self, request, context):
+        """Listing accounts (replicates LIST pattern offset limit)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListConversations(self, request, context):
+        """Listing conversations (replicates LIST_CONVERSATIONS)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReadInbox(self, request, context):
+        """Reading from the user's general inbox (READ)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReadConvo(self, request, context):
+        """Reading partial conversation (READ_CONVO)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReadFullConvo(self, request, context):
+        """Reading full conversation (READ_FULL_CONVO)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def PollConvo(self, request, context):
+        """Polling conversation for new messages (POLL_CONVO)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
     def CreateAccount(self, request, context):
         """Account management
@@ -115,39 +187,22 @@ class ChatServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def SendMessage(self, request, context):
-        """Messaging
+        """Send message (SEND)
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def ReadMessages(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def ReadConversation(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def PollConversation(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def ListConversations(self, request, context):
-        """Listing
+    def DeleteMessage(self, request, context):
+        """Delete message(s) (DELETE_MSG)
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def ListAccounts(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+    def MarkRead(self, request, context):
+        """Mark read (MARK_READ)
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -155,55 +210,75 @@ class ChatServiceServicer(object):
 
 def add_ChatServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'CreateAccount': grpc.unary_unary_rpc_method_handler(
-                    servicer.CreateAccount,
-                    request_deserializer=chat__pb2.CreateAccountRequest.FromString,
-                    response_serializer=chat__pb2.CreateAccountResponse.SerializeToString,
+            'ShowDB': grpc.unary_unary_rpc_method_handler(
+                    servicer.ShowDB,
+                    request_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+                    response_serializer=chat__pb2.ShowDBResponse.SerializeToString,
             ),
-            'Login': grpc.unary_unary_rpc_method_handler(
-                    servicer.Login,
-                    request_deserializer=chat__pb2.LoginRequest.FromString,
-                    response_serializer=chat__pb2.LoginResponse.SerializeToString,
-            ),
-            'Logout': grpc.unary_unary_rpc_method_handler(
-                    servicer.Logout,
-                    request_deserializer=chat__pb2.LogoutRequest.FromString,
-                    response_serializer=chat__pb2.LogoutResponse.SerializeToString,
-            ),
-            'DeleteAccount': grpc.unary_unary_rpc_method_handler(
-                    servicer.DeleteAccount,
-                    request_deserializer=chat__pb2.DeleteAccountRequest.FromString,
-                    response_serializer=chat__pb2.DeleteAccountResponse.SerializeToString,
-            ),
-            'SendMessage': grpc.unary_unary_rpc_method_handler(
-                    servicer.SendMessage,
-                    request_deserializer=chat__pb2.SendMessageRequest.FromString,
-                    response_serializer=chat__pb2.SendMessageResponse.SerializeToString,
-            ),
-            'ReadMessages': grpc.unary_unary_rpc_method_handler(
-                    servicer.ReadMessages,
-                    request_deserializer=chat__pb2.ReadMessagesRequest.FromString,
-                    response_serializer=chat__pb2.ReadMessagesResponse.SerializeToString,
-            ),
-            'ReadConversation': grpc.unary_unary_rpc_method_handler(
-                    servicer.ReadConversation,
-                    request_deserializer=chat__pb2.ReadConversationRequest.FromString,
-                    response_serializer=chat__pb2.ReadConversationResponse.SerializeToString,
-            ),
-            'PollConversation': grpc.unary_unary_rpc_method_handler(
-                    servicer.PollConversation,
-                    request_deserializer=chat__pb2.PollConversationRequest.FromString,
-                    response_serializer=chat__pb2.PollConversationResponse.SerializeToString,
+            'List': grpc.unary_unary_rpc_method_handler(
+                    servicer.List,
+                    request_deserializer=chat__pb2.ListRequest.FromString,
+                    response_serializer=chat__pb2.ListResponse.SerializeToString,
             ),
             'ListConversations': grpc.unary_unary_rpc_method_handler(
                     servicer.ListConversations,
                     request_deserializer=chat__pb2.ListConversationsRequest.FromString,
                     response_serializer=chat__pb2.ListConversationsResponse.SerializeToString,
             ),
-            'ListAccounts': grpc.unary_unary_rpc_method_handler(
-                    servicer.ListAccounts,
-                    request_deserializer=chat__pb2.ListAccountsRequest.FromString,
-                    response_serializer=chat__pb2.ListAccountsResponse.SerializeToString,
+            'ReadInbox': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReadInbox,
+                    request_deserializer=chat__pb2.ReadInboxRequest.FromString,
+                    response_serializer=chat__pb2.ReadInboxResponse.SerializeToString,
+            ),
+            'ReadConvo': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReadConvo,
+                    request_deserializer=chat__pb2.ReadConvoRequest.FromString,
+                    response_serializer=chat__pb2.ReadConvoResponse.SerializeToString,
+            ),
+            'ReadFullConvo': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReadFullConvo,
+                    request_deserializer=chat__pb2.ReadConvoRequest.FromString,
+                    response_serializer=chat__pb2.ReadConvoResponse.SerializeToString,
+            ),
+            'PollConvo': grpc.unary_unary_rpc_method_handler(
+                    servicer.PollConvo,
+                    request_deserializer=chat__pb2.PollConvoRequest.FromString,
+                    response_serializer=chat__pb2.PollConvoResponse.SerializeToString,
+            ),
+            'CreateAccount': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateAccount,
+                    request_deserializer=chat__pb2.AccountRequest.FromString,
+                    response_serializer=chat__pb2.Response.SerializeToString,
+            ),
+            'Login': grpc.unary_unary_rpc_method_handler(
+                    servicer.Login,
+                    request_deserializer=chat__pb2.AccountRequest.FromString,
+                    response_serializer=chat__pb2.Response.SerializeToString,
+            ),
+            'Logout': grpc.unary_unary_rpc_method_handler(
+                    servicer.Logout,
+                    request_deserializer=chat__pb2.AccountRequest.FromString,
+                    response_serializer=chat__pb2.Response.SerializeToString,
+            ),
+            'DeleteAccount': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteAccount,
+                    request_deserializer=chat__pb2.AccountRequest.FromString,
+                    response_serializer=chat__pb2.Response.SerializeToString,
+            ),
+            'SendMessage': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendMessage,
+                    request_deserializer=chat__pb2.SendMessageRequest.FromString,
+                    response_serializer=chat__pb2.Response.SerializeToString,
+            ),
+            'DeleteMessage': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteMessage,
+                    request_deserializer=chat__pb2.DeleteMessageRequest.FromString,
+                    response_serializer=chat__pb2.Response.SerializeToString,
+            ),
+            'MarkRead': grpc.unary_unary_rpc_method_handler(
+                    servicer.MarkRead,
+                    request_deserializer=chat__pb2.MarkReadRequest.FromString,
+                    response_serializer=chat__pb2.Response.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -214,10 +289,11 @@ def add_ChatServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class ChatService(object):
-    """Missing associated documentation comment in .proto file."""
+    """The ChatService: all RPCs replicate the custom commands from server.py
+    """
 
     @staticmethod
-    def CreateAccount(request,
+    def ShowDB(request,
             target,
             options=(),
             channel_credentials=None,
@@ -230,9 +306,9 @@ class ChatService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/chat.ChatService/CreateAccount',
-            chat__pb2.CreateAccountRequest.SerializeToString,
-            chat__pb2.CreateAccountResponse.FromString,
+            '/chat.ChatService/ShowDB',
+            google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+            chat__pb2.ShowDBResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -244,7 +320,7 @@ class ChatService(object):
             _registered_method=True)
 
     @staticmethod
-    def Login(request,
+    def List(request,
             target,
             options=(),
             channel_credentials=None,
@@ -257,171 +333,9 @@ class ChatService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/chat.ChatService/Login',
-            chat__pb2.LoginRequest.SerializeToString,
-            chat__pb2.LoginResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def Logout(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/chat.ChatService/Logout',
-            chat__pb2.LogoutRequest.SerializeToString,
-            chat__pb2.LogoutResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def DeleteAccount(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/chat.ChatService/DeleteAccount',
-            chat__pb2.DeleteAccountRequest.SerializeToString,
-            chat__pb2.DeleteAccountResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def SendMessage(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/chat.ChatService/SendMessage',
-            chat__pb2.SendMessageRequest.SerializeToString,
-            chat__pb2.SendMessageResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def ReadMessages(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/chat.ChatService/ReadMessages',
-            chat__pb2.ReadMessagesRequest.SerializeToString,
-            chat__pb2.ReadMessagesResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def ReadConversation(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/chat.ChatService/ReadConversation',
-            chat__pb2.ReadConversationRequest.SerializeToString,
-            chat__pb2.ReadConversationResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def PollConversation(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/chat.ChatService/PollConversation',
-            chat__pb2.PollConversationRequest.SerializeToString,
-            chat__pb2.PollConversationResponse.FromString,
+            '/chat.ChatService/List',
+            chat__pb2.ListRequest.SerializeToString,
+            chat__pb2.ListResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -460,7 +374,7 @@ class ChatService(object):
             _registered_method=True)
 
     @staticmethod
-    def ListAccounts(request,
+    def ReadInbox(request,
             target,
             options=(),
             channel_credentials=None,
@@ -473,9 +387,279 @@ class ChatService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/chat.ChatService/ListAccounts',
-            chat__pb2.ListAccountsRequest.SerializeToString,
-            chat__pb2.ListAccountsResponse.FromString,
+            '/chat.ChatService/ReadInbox',
+            chat__pb2.ReadInboxRequest.SerializeToString,
+            chat__pb2.ReadInboxResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReadConvo(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/chat.ChatService/ReadConvo',
+            chat__pb2.ReadConvoRequest.SerializeToString,
+            chat__pb2.ReadConvoResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReadFullConvo(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/chat.ChatService/ReadFullConvo',
+            chat__pb2.ReadConvoRequest.SerializeToString,
+            chat__pb2.ReadConvoResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PollConvo(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/chat.ChatService/PollConvo',
+            chat__pb2.PollConvoRequest.SerializeToString,
+            chat__pb2.PollConvoResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CreateAccount(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/chat.ChatService/CreateAccount',
+            chat__pb2.AccountRequest.SerializeToString,
+            chat__pb2.Response.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Login(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/chat.ChatService/Login',
+            chat__pb2.AccountRequest.SerializeToString,
+            chat__pb2.Response.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Logout(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/chat.ChatService/Logout',
+            chat__pb2.AccountRequest.SerializeToString,
+            chat__pb2.Response.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteAccount(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/chat.ChatService/DeleteAccount',
+            chat__pb2.AccountRequest.SerializeToString,
+            chat__pb2.Response.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SendMessage(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/chat.ChatService/SendMessage',
+            chat__pb2.SendMessageRequest.SerializeToString,
+            chat__pb2.Response.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteMessage(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/chat.ChatService/DeleteMessage',
+            chat__pb2.DeleteMessageRequest.SerializeToString,
+            chat__pb2.Response.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def MarkRead(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/chat.ChatService/MarkRead',
+            chat__pb2.MarkReadRequest.SerializeToString,
+            chat__pb2.Response.FromString,
             options,
             channel_credentials,
             insecure,
