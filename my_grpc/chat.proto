@@ -6,33 +6,32 @@ import "google/protobuf/empty.proto";
 
 // For debugging, replicating SHOW_DB
 message ShowDBResponse {
-  // We'll return multiple lines of output
-  repeated string lines = 1;
+  repeated string lines = 1; 
 }
 
 // For LIST command (pattern, offset, limit)
 message ListRequest {
-  string pattern = 1; // e.g. "%", or something the client can pass
+  string pattern = 1; 
   int32 offset = 2;
   int32 limit = 3;
 }
 message ListResponse {
-  string status = 1;    // "OK" or "ERROR"
-  string message = 2;   // e.g. "No accounts found" or "Total accounts matching..."
-  int32 total_count = 3; 
-  repeated string accounts = 4; // each account that matched
+  string status = 1;   
+  string message = 2;  
+  int32 total_count = 3;
+  repeated string accounts = 4; 
 }
 
-// For READ_CONVO and READ_FULL_CONVO
+// For READ_CONVO and READ_FULL_CONVO (allow `n` to be string to replicate custom-protocol logic)
 message ReadConvoRequest {
   string username = 1;
   string hashed_password = 2;
   string other_user = 3;
-  int32 n = 4;
+  string n = 4;  // changed to string so we can pass "a" or "5"
 }
 message ReadConvoResponse {
-  string status = 1;    // "OK" or "ERROR"
-  string message = 2;   // error messages or leftover text
+  string status = 1;   
+  string message = 2;  
   repeated Message messages = 3;
 }
 
@@ -43,17 +42,16 @@ message PollConvoRequest {
   string other_user = 3;
 }
 message PollConvoResponse {
-  string status = 1;    // "OK" or "ERROR"
-  string message = 2;   // "No new messages" or error text
-  repeated Message messages = 3; // unread messages just read
+  string status = 1;  
+  string message = 2; 
+  repeated Message messages = 3; 
 }
 
-// For READ (just "READ username hashed_password n")
-// i.e., reading from the user's general inbox (ordered by ID)
+// For READ (inbox read). n is also a string
 message ReadInboxRequest {
   string username = 1;
   string hashed_password = 2;
-  int32 n = 3;
+  string n = 3;  // changed to string
 }
 message ReadInboxResponse {
   string status = 1;    
@@ -74,19 +72,17 @@ message SendMessageRequest {
   string message = 4;
 }
 
-// For DELETE_MSG. We allow multiple IDs or "ALL"
+// For DELETE_MSG
 message DeleteMessageRequest {
   string username = 1;
   string hashed_password = 2;
-  // Could be "ALL", or "123", or "100,101,102"
-  string message_ids = 3;
+  string message_ids = 3; 
 }
 
 // For MARK_READ
 message MarkReadRequest {
   string username = 1;
   string hashed_password = 2;
-  // single ID or "ALL"
   string message_id = 3;
 }
 
@@ -103,12 +99,12 @@ message ListConversationsResponse {
 message Conversation {
   string partner = 1;
   int32 unread = 2;
-  string last_message = 3; // e.g. "alice: hello"
+  string last_message = 3; 
 }
 
 message Response {
   string status = 1;   // "OK" or "ERROR"
-  string message = 2;  // more detail
+  string message = 2;  
 }
 
 message Message {
@@ -117,28 +113,26 @@ message Message {
   string content = 3;
 }
 
-// The ChatService: all RPCs replicate the custom commands from server.py
 service ChatService {
-
-  // Debug command: replicate SHOW_DB
+  // Debug
   rpc ShowDB(google.protobuf.Empty) returns (ShowDBResponse);
 
-  // Listing accounts (replicates LIST pattern offset limit)
+  // Listing accounts
   rpc List(ListRequest) returns (ListResponse);
 
-  // Listing conversations (replicates LIST_CONVERSATIONS)
+  // Listing conversations
   rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
 
-  // Reading from the user's general inbox (READ)
+  // Reading from inbox
   rpc ReadInbox(ReadInboxRequest) returns (ReadInboxResponse);
 
-  // Reading partial conversation (READ_CONVO)
+  // Reading partial conversation
   rpc ReadConvo(ReadConvoRequest) returns (ReadConvoResponse);
 
-  // Reading full conversation (READ_FULL_CONVO)
+  // Reading full conversation
   rpc ReadFullConvo(ReadConvoRequest) returns (ReadConvoResponse);
 
-  // Polling conversation for new messages (POLL_CONVO)
+  // Polling conversation
   rpc PollConvo(PollConvoRequest) returns (PollConvoResponse);
 
   // Account management
@@ -147,12 +141,12 @@ service ChatService {
   rpc Logout(AccountRequest) returns (Response);
   rpc DeleteAccount(AccountRequest) returns (Response);
 
-  // Send message (SEND)
+  // Send message
   rpc SendMessage(SendMessageRequest) returns (Response);
 
-  // Delete message(s) (DELETE_MSG)
+  // Delete message(s)
   rpc DeleteMessage(DeleteMessageRequest) returns (Response);
 
-  // Mark read (MARK_READ)
+  // Mark read
   rpc MarkRead(MarkReadRequest) returns (Response);
 }

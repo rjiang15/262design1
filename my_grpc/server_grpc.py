@@ -6,12 +6,11 @@ from concurrent import futures
 import grpc
 from google.protobuf import empty_pb2
 
-import chat_pb2
-import chat_pb2_grpc
+# import chat_pb2
+# import chat_pb2_grpc
+from my_grpc import chat_pb2, chat_pb2_grpc
 
-# We'll just define a function to ensure the database/tables exist once at startup
 def initialize_database(db_path):
-    # Create a temporary connection for table creation
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute('''
@@ -34,18 +33,12 @@ def initialize_database(db_path):
     conn.commit()
     conn.close()
 
-# Path to your database
 db_path = os.path.join(os.path.dirname(__file__), "server.db")
-initialize_database(db_path)  # Ensure tables exist
+initialize_database(db_path)
 
 def _show_db_contents():
-    """
-    Return lines describing DB content, replicating SHOW_DB command output,
-    but each call uses a fresh DB connection.
-    """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-
     lines = []
     lines.append("----- Database Contents -----")
     lines.append("Accounts:")
@@ -55,17 +48,17 @@ def _show_db_contents():
     for row in cursor.execute("SELECT * FROM messages"):
         lines.append(str(row))
     lines.append("----- End of Database Contents -----")
-
     conn.close()
     return lines
 
-
 class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
 
+    # Debug: ShowDB
     def ShowDB(self, request, context):
         lines = _show_db_contents()
         return chat_pb2.ShowDBResponse(lines=lines)
 
+    # List accounts (pattern, offset, limit)
     def List(self, request, context):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -75,7 +68,6 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
                 pattern = "%"
             if "%" not in pattern:
                 pattern = f"%{pattern}%"
-
             offset = request.offset
             limit = request.limit
 
@@ -92,14 +84,9 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
                     total_count=0,
                     accounts=[]
                 )
-
-            cursor.execute(
-                "SELECT COUNT(*) FROM accounts WHERE username LIKE ?",
-                (pattern,)
-            )
+            cursor.execute("SELECT COUNT(*) FROM accounts WHERE username LIKE ?", (pattern,))
             total = cursor.fetchone()[0]
             account_list = [r[0] for r in rows]
-
             conn.close()
             return chat_pb2.ListResponse(
                 status="OK",
@@ -116,6 +103,7 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
                 accounts=[]
             )
 
+    # ListConversations
     def ListConversations(self, request, context):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -126,9 +114,11 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
         row = cursor.fetchone()
         if not row:
             conn.close()
+            # Return empty
             return chat_pb2.ListConversationsResponse()
         if row[0] != hashed_password:
             conn.close()
+            # Return empty
             return chat_pb2.ListConversationsResponse()
 
         cursor.execute("""
@@ -139,10 +129,10 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
             ) ORDER BY partner ASC
         """, (username, username, username))
         partners = cursor.fetchall()
+
         conversations = []
         total_unread = 0
         for (partner,) in partners:
-            # skip if account doesn't exist
             cursor.execute("SELECT COUNT(*) FROM accounts WHERE username = ?", (partner,))
             if cursor.fetchone()[0] == 0:
                 continue
@@ -152,7 +142,6 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
             )
             unread = cursor.fetchone()[0]
             total_unread += unread
-
             cursor.execute("""
                 SELECT sender, content FROM messages
                 WHERE (recipient = ? AND sender = ?) OR (recipient = ? AND sender = ?)
@@ -173,13 +162,22 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
             conversations=conversations
         )
 
+    # ReadInbox
     def ReadInbox(self, request, context):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         username = request.username
         hashed_password = request.hashed_password
-        n = request.n
+        raw_n = request.n
 
+        # parse n
+        try:
+            n = int(raw_n)
+        except:
+            conn.close()
+            return chat_pb2.ReadInboxResponse(status="ERROR", message="n must be an integer")
+
+        # authenticate
         cursor.execute("SELECT password FROM accounts WHERE username = ?", (username,))
         row = cursor.fetchone()
         if not row:
@@ -214,14 +212,23 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
             messages=messages
         )
 
+    # ReadConvo (partial read)
     def ReadConvo(self, request, context):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         username = request.username
         hashed_password = request.hashed_password
         other_user = request.other_user
-        n = request.n
+        raw_n = request.n
 
+        # parse n
+        try:
+            n = int(raw_n)
+        except:
+            conn.close()
+            return chat_pb2.ReadConvoResponse(status="ERROR", message="n must be an integer")
+
+        # auth
         cursor.execute("SELECT password FROM accounts WHERE username = ?", (username,))
         row = cursor.fetchone()
         if not row:
@@ -231,7 +238,7 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
             conn.close()
             return chat_pb2.ReadConvoResponse(status="ERROR", message="Authentication failed")
 
-        # Count how many unread
+        # how many unread
         cursor.execute("""
             SELECT COUNT(*) FROM messages
             WHERE ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
@@ -240,6 +247,7 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
         unread_count = cursor.fetchone()[0]
 
         if unread_count > 0:
+            # If n > unread_count => error
             if n > unread_count:
                 conn.close()
                 return chat_pb2.ReadConvoResponse(
@@ -253,6 +261,7 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
                 ORDER BY id ASC LIMIT ?
             """, (username, other_user, other_user, username, n))
         else:
+            # no unread => read first n messages in total
             cursor.execute("""
                 SELECT id, sender, content FROM messages
                 WHERE (sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?)
@@ -281,20 +290,25 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
             messages.append(chat_pb2.Message(id=mid, sender=sender, content=content))
 
         conn.close()
-        return chat_pb2.ReadConvoResponse(
-            status="OK",
-            message="",
-            messages=messages
-        )
+        return chat_pb2.ReadConvoResponse(status="OK", message="", messages=messages)
 
+    # ReadFullConvo
     def ReadFullConvo(self, request, context):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         username = request.username
         hashed_password = request.hashed_password
         other_user = request.other_user
-        n = request.n
+        raw_n = request.n
 
+        # parse n
+        try:
+            n = int(raw_n)
+        except:
+            conn.close()
+            return chat_pb2.ReadConvoResponse(status="ERROR", message="n must be an integer")
+
+        # auth
         cursor.execute("SELECT password FROM accounts WHERE username = ?", (username,))
         row = cursor.fetchone()
         if not row:
@@ -322,12 +336,9 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
             messages.append(chat_pb2.Message(id=mid, sender=sender, content=content))
 
         conn.close()
-        return chat_pb2.ReadConvoResponse(
-            status="OK",
-            message="",
-            messages=messages
-        )
+        return chat_pb2.ReadConvoResponse(status="OK", message="", messages=messages)
 
+    # PollConvo
     def PollConvo(self, request, context):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -366,6 +377,7 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
         conn.close()
         return chat_pb2.PollConvoResponse(status="OK", message="", messages=messages)
 
+    # CreateAccount
     def CreateAccount(self, request, context):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -386,6 +398,7 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
         conn.close()
         return chat_pb2.Response(status="OK", message="Account created")
 
+    # Login
     def Login(self, request, context):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -403,15 +416,12 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
 
         cursor.execute("UPDATE accounts SET logged_in = 1 WHERE username = ?", (username,))
         conn.commit()
-
         cursor.execute("SELECT COUNT(*) FROM messages WHERE recipient = ? AND read = 0", (username,))
         count = cursor.fetchone()[0]
         conn.close()
-        return chat_pb2.Response(
-            status="OK",
-            message=f"Login successful, unread messages: {count}"
-        )
+        return chat_pb2.Response(status="OK", message=f"Login successful, unread messages: {count}")
 
+    # Logout
     def Logout(self, request, context):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -432,6 +442,7 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
         conn.close()
         return chat_pb2.Response(status="OK", message="Logged out")
 
+    # DeleteAccount
     def DeleteAccount(self, request, context):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -453,6 +464,7 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
         conn.close()
         return chat_pb2.Response(status="OK", message="Account deleted")
 
+    # SendMessage
     def SendMessage(self, request, context):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -460,6 +472,14 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
         hashed_password = request.hashed_password
         recipient = request.recipient
         message = request.message
+
+        # If message is empty => replicate usage error
+        if not message.strip():
+            conn.close()
+            return chat_pb2.Response(
+                status="ERROR",
+                message="Usage: SEND sender hashed_password recipient message"
+            )
 
         if len(message) > 256:
             conn.close()
@@ -488,6 +508,7 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
         conn.close()
         return chat_pb2.Response(status="OK", message=f"Message sent with id {msg_id}")
 
+    # DeleteMessage
     def DeleteMessage(self, request, context):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -520,7 +541,7 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
                 except ValueError:
                     conn.close()
                     return chat_pb2.Response(status="ERROR", message=f"Message ID '{p}' invalid")
-            # check authorization for each
+            # check authorization
             for mid in msg_ids:
                 cursor.execute("SELECT * FROM messages WHERE id = ? AND (recipient = ? OR sender = ?)",
                                (mid, username, username))
@@ -539,6 +560,7 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
                 message=f"Deleted message ids {','.join(map(str, msg_ids))}"
             )
 
+    # MarkRead
     def MarkRead(self, request, context):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -591,7 +613,6 @@ def serve():
         server.wait_for_termination()
     except KeyboardInterrupt:
         server.stop(0)
-
 
 if __name__ == "__main__":
     serve()
