@@ -20,7 +20,7 @@ from my_grpc import chat_pb2, chat_pb2_grpc
 
 parser = argparse.ArgumentParser(description="Start the gRPC chat client.")
 parser.add_argument("--host", type=str, default="127.0.0.1", help="Server host (default: 127.0.0.1)")
-parser.add_argument("--port", type=int, default=50051, help="Server port (default: 50051)")
+parser.add_argument("--port", type=int, default=54400, help="Server port (default: 54400)")
 args = parser.parse_args()
 SERVER_ADDRESS = f"{args.host}:{args.port}"
 
