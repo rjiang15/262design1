@@ -601,7 +601,7 @@ class ChatServiceServicer(chat_pb2_grpc.ChatServiceServicer):
 def serve():
     parser = argparse.ArgumentParser(description="Start the gRPC Chat server.")
     parser.add_argument("--host", type=str, default="127.0.0.1", help="Host (default: 127.0.0.1)")
-    parser.add_argument("--port", type=int, default=50051, help="Port (default: 50051)")
+    parser.add_argument("--port", type=int, default=54400, help="Port (default: 54400)")
     args = parser.parse_args()
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))

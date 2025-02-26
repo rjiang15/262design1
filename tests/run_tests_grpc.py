@@ -26,7 +26,7 @@ RED = "\033[91m"
 RESET = "\033[0m"
 
 HOST = "127.0.0.1"
-PORT = 50051
+PORT = 54400
 SERVER_CMD = ["python", "server_grpc.py", "--host", HOST, "--port", str(PORT)]
 
 def hash_password(pw):
